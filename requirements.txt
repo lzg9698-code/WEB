@@ -1,0 +1,29 @@
+# Flask和Web框架
+Flask==2.3.3
+Flask-CORS==4.0.0
+
+# 模板引擎（必须使用Jinja2）
+Jinja2==3.1.2
+
+# YAML解析（必须使用PyYAML）
+PyYAML==6.0.1
+
+# 文件处理
+Werkzeug==2.3.7
+pathlib2==2.3.7
+
+# 开发和测试
+pytest==7.4.2
+pytest-flask==1.2.0
+
+# 日志和配置
+python-dotenv==1.0.0
+
+# HTTP请求
+requests==2.31.0
+
+# 数据验证
+jsonschema==4.19.0
+
+# 工具库
+click==8.1.7

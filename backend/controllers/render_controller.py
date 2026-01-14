@@ -1,0 +1,469 @@
+"""
+模板渲染控制器
+
+此文件必须严格遵循PROJECT_REQUIREMENTS.md文档约束。
+任何修改都必须先更新需求文档，然后修改代码。
+违反此约束将导致代码被拒绝。
+
+职责边界：
+- ✅ 模板文件的解析和渲染
+- ✅ Jinja2模板语法支持
+- ✅ 多文件批量渲染
+- ✅ 实时预览功能
+- ❌ 不负责模板内容编辑（由编辑器模块负责）
+- ❌ 不负责参数验证（由参数管理模块负责）
+"""
+
+from flask import Blueprint, request, jsonify, send_file
+import logging
+from pathlib import Path
+import yaml
+import tempfile
+import zipfile
+import math
+from datetime import datetime
+from typing import List, Dict, Any, Optional
+from jinja2 import Environment, TemplateError
+import json
+
+# 创建蓝图
+render_bp = Blueprint('render', __name__, url_prefix='/api/render')
+
+logger = logging.getLogger(__name__)
+
+class JinjaRenderer:
+    """Jinja2渲染引擎"""
+    
+    def __init__(self, workspace_path: str = "templates"):
+        self.workspace_path = Path(workspace_path)
+        self.env = Environment(
+            loader=jinja2.FileSystemLoader(self.workspace_path),
+            autoescape=False,
+            trim_blocks=True,
+            lstrip_blocks=True,
+            keep_trailing_newline=True
+        )
+        self._setup_custom_filters()
+    
+    def _setup_custom_filters(self):
+        """设置Jinja2自定义过滤器"""
+        def round_filter(value, precision=2):
+            """四舍五入过滤器"""
+            try:
+                return round(float(value), precision)
+            except (ValueError, TypeError):
+                return value
+        
+        def format_filter(value, format_str):
+            """格式化过滤器"""
+            try:
+                return format(float(value), format_str)
+            except (ValueError, TypeError):
+                return value
+        
+        def safe_filter(value):
+            """安全文本过滤器"""
+            if value is None:
+                return ''
+            if isinstance(value, str):
+                return str(value)
+            return str(value)
+        
+        def length_filter(value, unit='mm'):
+            """长度单位转换"""
+            try:
+                if value is None:
+                    return '0'
+                num_value = float(value)
+                if unit.lower() == 'inch':
+                    return str(num_value * 25.4)  # 英寸转毫米
+                return str(num_value)
+            except (ValueError, TypeError):
+                return value
+        
+        def angle_filter(value, unit='deg'):
+            """角度单位转换"""
+            try:
+                if value is None:
+                    return '0'
+                num_value = float(value)
+                if unit.lower() in ['deg', 'degree']:
+                    return str(num_value)
+                elif unit.lower() in ['rad', 'radian']:
+                    return str(num_value * 180 / 3.14159)
+                return str(num_value)
+            except (ValueError, TypeError):
+                return value
+        
+        def speed_filter(value, unit='rpm'):
+            """速度单位转换"""
+            try:
+                if value is None:
+                    return '0'
+                num_value = float(value)
+                if unit.lower() in ['rpm', 'rev/min']:
+                    return str(num_value)
+                return str(num_value)
+            except (ValueError, TypeError):
+                return value
+        
+        def sqrt_filter(value):
+            """平方根函数"""
+            try:
+                return str(float(value) ** 0.5)
+            except (ValueError, TypeError):
+                return value
+        
+        def sin_filter(value):
+            """正弦函数（角度转弧度）"""
+            try:
+                return str(math.sin(math.radians(float(value))))
+            except (ValueError, TypeError):
+                return value
+        
+        def cos_filter(value):
+            """余弦函数（角度转弧度）"""
+            try:
+                return str(math.cos(math.radians(float(value))))
+            except (ValueError, TypeError):
+                return value
+        
+        def abs_filter(value):
+            """绝对值函数"""
+            try:
+                return str(abs(float(value)))
+            except (ValueError, TypeError):
+                return value
+        
+        def min_filter(*args):
+            """最小值函数"""
+            try:
+                return str(min(float(x) for x in args if x is not None))
+            except (ValueError, TypeError):
+                return args[0] if args else '0'
+        
+        def max_filter(*args):
+            """最大值函数"""
+            try:
+                return str(max(float(x) for x in args if x is not None))
+            except (ValueError, TypeError):
+                return args[0] if args else '0'
+        
+        # 注册自定义过滤器
+        self.env.filters['round'] = round_filter
+        self.env.filters['format'] = format_filter
+        self.env.filters['safe'] = safe_filter
+        self.env.filters['length'] = length_filter
+        self.env.filters['angle'] = angle_filter
+        self.env.filters['speed'] = speed_filter
+        env.filters['sqrt'] = sqrt_filter
+        env.filters['sin'] = sin_filter
+        env.filters['cos'] = cos_filter
+        env.filters['abs'] = abs_filter
+        env.filters['min'] = min_filter
+        env.filters['max'] = max_filter
+        
+        # 设置全局函数
+        self.env.globals.update({
+            'round': round_filter,
+            'format': format_filter,
+            'safe': safe_filter,
+            'length': length_filter,
+            'angle': angle_filter,
+            'speed': speed_filter,
+            'sqrt': sqrt_filter,
+            'sin': sin_filter,
+            'cos': cos_filter,
+            'abs': abs_filter,
+            'min': min_filter,
+            'max': max_filter
+        })
+    
+    def render_template(self, template_path: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
+        """渲染单个模板"""
+        try:
+            template = self.env.get_template(template_path)
+            result = template.render(**parameters)
+            return {
+                'success': True,
+                'content': result,
+                'template_path': template_path,
+                'render_time': datetime.now().isoformat()
+            }
+        except TemplateError as e:
+            logger.error(f"模板渲染失败: {template_path}, 错误: {str(e)}")
+            return {
+                'success': False,
+                'error': str(e),
+                'template_path': template_path
+            }
+        except Exception as e:
+            logger.error(f"渲染异常: {template_path}, 错误: {str(e)}")
+            return {
+                'success': False,
+                'error': str(e),
+                'template_path': template_path
+            }
+    
+    def render_package(self, package_path: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
+        """渲染模板包"""
+        try:
+            package_config = self._load_package_config(package_path)
+            results = {}
+            
+            for output_name, output_config in package_config.get('outputs', {}).get('files', {}):
+                if not output_config.get('enabled', True):
+                    continue
+                
+                template_path = output_config['template']
+                filename_pattern = output_config.get('filename_pattern', 'output')
+                extension = output_config.get('extension', '.nc')
+                
+                result = self.render_template(template_path, parameters)
+                
+                if result['success']:
+                    # 生成文件名
+                    filename = self._generate_filename(filename_pattern, parameters) + extension
+                    
+                    results[output_name] = {
+                        'filename': filename,
+                        'content': result['content'],
+                        'description': output_config.get('description', ''),
+                        'success': True,
+                        'render_time': result['render_time']
+                    }
+                else:
+                    results[output_name] = {
+                        'filename': filename + extension,
+                        'content': '',
+                        'description': output_config.get('description', ''),
+                        'success': False,
+                        'error': result.get('error', '未知错误'),
+                        'render_time': datetime.now().isoformat()
+                    }
+            
+            return {
+                'success': True,
+                'package_path': package_path,
+                'results': results,
+                'total': len(results),
+                'render_time': datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            logger.error(f"渲染模板包失败: {package_path}, 错误: {str(e)}")
+            return {
+                'success': False,
+                'error': str(e),
+                'package_path': package_path,
+                'results': {},
+                'total': 0,
+                'render_time': datetime.now().isoformat()
+            }
+    
+    def _load_package_config(self, package_path: str) -> Dict[str, Any]:
+        """加载模板包配置"""
+        config_file = Path(package_path) / "package.yaml"
+        
+        if not config_file.exists():
+            raise FileNotFoundError(f"模板包配置文件不存在: {config_file}")
+        
+        with open(config_file, 'r', encoding='utf-8') as f:
+            return yaml.safe_load(f)
+    
+    def _generate_filename(self, pattern: str, parameters: Dict[str, Any]) -> str:
+        """生成文件名"""
+        try:
+            template = self.env.from_string(pattern)
+            return template.render(**parameters)
+        except Exception as e:
+            logger.error(f"生成文件名失败: {pattern}, 错误: {str(e)}")
+            # 返回原始模式
+            return pattern
+    
+    def get_available_outputs(self, package_path: str) -> List[Dict[str, Any]]:
+        """获取可用的输出文件列表"""
+        try:
+            config = self._load_package_config(package_path)
+            outputs = []
+            
+            for output_name, output_config in config.get('outputs', {}).get('files', {}):
+                if output_config.get('enabled', True):
+                    outputs.append({
+                        'name': output_name,
+                        'template': output_config.get('template'),
+                        'description': output_config.get('description', ''),
+                        'enabled': True
+                    })
+            
+            return outputs
+        except Exception as e:
+            logger.error(f"获取输出列表失败: {package_path}, 错误: {str(e)}")
+            return []
+    
+    def validate_template(self, template_path: str) -> Dict[str, Any]:
+        """验证模板语法"""
+        try:
+            template = self.env.get_template(template_path)
+            template.parse()  # 检查语法错误
+            return {
+                'valid': True,
+                'errors': [],
+                'warnings': []
+            }
+        except TemplateSyntaxError as e:
+            logger.error(f"模板语法错误: {template_path}, 错误: {str(e)}")
+            return {
+                'valid': False,
+                'errors': [str(e)],
+                'warnings': []
+            }
+        except Exception as e:
+            logger.error(f"模板验证异常: {template_path}, 错误: {str(e)}")
+            return {
+                'valid': False,
+                'errors': [str(e)],
+                'warnings': []
+            }
+
+@render_bp.route('/templates/<package_name>/render', methods=['POST'])
+def render_template(package_name: str):
+    """渲染指定模板包"""
+    try:
+        data = request.get_json()
+        if not data or 'parameters' not in data:
+            return jsonify({
+                'success': False,
+                'error': '请提供parameters参数'
+            }), 400
+        
+        parameters = data['parameters']
+        
+        package_manager = TemplateManager()
+        template_path = package_manager.get_package_by_name(package_name)
+        if not template_path:
+            return jsonify({
+                'success': False,
+                'error': f'模板包 {package_name} 不存在'
+            }), 404
+        
+        # 渲染模板包
+        result = render_engine.render_package(str(template_path), parameters)
+        
+        return jsonify({
+            'success': True,
+            'data': result,
+            'timestamp': result['render_time']
+        })
+        
+    except Exception as e:
+        logger.error(f"渲染模板包失败: {package_name}, 错误: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@render_bp.route('/templates/<package_name>/validate', methods=['POST'])
+def validate_template(package_name: str):
+    """验证模板包"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': '请提供验证数据'
+            }), 400
+        
+        package_manager = TemplateManager()
+        template_path = package_manager.get_package_by_name(package_name)
+        if not template_path:
+            return jsonify({
+                'success': False,
+                'error': f'模板包 {package_name} 不存在'
+            }), 404
+        
+        results = []
+        template_files = template_path.get_template_files()
+        
+        # 验证每个模板文件
+        for template_file in template_files:
+            validation = render_engine.validate_template(template_file)
+            if not validation['valid']:
+                results.append({
+                    'file': template_file,
+                    'errors': validation['errors'],
+                    'warnings': validation['warnings']
+                })
+        
+        template_validation = render_engine.validate_template(template_path / "package.yaml")
+        if not template_validation['valid']:
+            results.append({
+                'file': 'package.yaml',
+                'errors': template_validation['errors'],
+                'warnings': template_validation['warnings']
+            })
+        
+        return jsonify({
+            'success': len(results) == 0,
+            'data': {
+                'package_name': package_name,
+                'validation': template_validation,
+                'files': results
+            }
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@render_bp.route('/preview/<package_name>', methods=['POST'])
+def preview_template(package_name: str):
+    """预览模板渲染结果"""
+    try:
+        data = request.get_json()
+        if not data or 'parameters' not in data:
+            return jsonify({
+                'success': False,
+                'error': '请提供parameters参数'
+            }), 400
+        
+        parameters = data['parameters']
+        
+        package_manager = TemplateManager()
+        template_path = package_manager.get_package_by_name(package_name)
+        if not template_path:
+            return jsonify({
+                'success': false,
+                'error': f'模板包 {package_name} 不存在'
+            }), 404
+        
+        # 获取主模板进行预览
+        main_template = template_path.config.get('templates', {}).get('main')
+        if main_template:
+            result = render_engine.render_template(main_template, parameters)
+            return jsonify({
+                'success': True,
+                'data': {
+                    'content': result['content'],
+                    'template_path': main_template,
+                    'preview_time': result['render_time']
+                }
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': '没有找到主模板文件'
+            }), 404
+        
+    except Exception as e:
+        logger.error(f"预览模板失败: {package_name}, 错误: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+# 模板管理器（需要从模板控制器导入）
+from backend.controllers.template_controller import TemplateManager
+

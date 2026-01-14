@@ -1,0 +1,35 @@
+; 示例数控程序 - 严格遵循PROJECT_REQUIREMENTS.md文档约束
+; 程序名称: {{ program_name }}
+; 工件直径: {{ workpiece_diameter }}mm
+; 切削深度: {{ cutting_depth }}mm
+; 生成时间: {{ now }}
+
+G21 ; 单位设置为毫米
+G90 ; 绝对坐标编程
+G94 ; 进给率单位为mm/min
+
+; 程序开始
+O{{ program_name }}
+
+{% if use_coolant %}
+M08 ; 冷却液开启
+{% endif %}
+
+; 安全高度移动
+G00 Z10.000
+
+; 开始加工
+G01 Z-{{ cutting_depth }} F100
+
+; 简单的圆形轨迹
+G02 X{{ workpiece_diameter }} Y0 I{{ workpiece_diameter/2 }} F200
+
+; 返回安全高度
+G00 Z10.000
+
+{% if use_coolant %}
+M09 ; 冷却液关闭
+{% endif %}
+
+; 程序结束
+M30

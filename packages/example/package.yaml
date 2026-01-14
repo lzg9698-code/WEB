@@ -1,0 +1,87 @@
+# 示例模板包配置
+# 严格遵循PROJECT_REQUIREMENTS.md文档约束
+
+package:
+  name: example
+  displayName: "示例模板包"
+  version: "1.0.0"
+  description: "一个简单的示例模板包，用于测试系统功能"
+  category: "示例"
+  tags: ["示例", "测试", "基础"]
+  author: "系统"
+  icon: "📦"
+  color: "#3498db"
+  language: "zh-CN"
+
+dependencies: []
+
+templates:
+  main: "templates/main.j2"
+
+variables:
+  groups:
+    basic:
+      name: "基本参数"
+      icon: "🔧"
+      parameters:
+        program_name:
+          type: "string"
+          label: "程序名称"
+          description: "数控程序的名称"
+          default: "EXAMPLE"
+          required: true
+        
+        workpiece_diameter:
+          type: "length"
+          label: "工件直径"
+          unit: "mm"
+          default: 50
+          range: [1, 500]
+          required: true
+        
+        cutting_depth:
+          type: "length"
+          label: "切削深度"
+          unit: "mm"
+          default: 2
+          range: [0.1, 20]
+          required: true
+        
+        use_coolant:
+          type: "boolean"
+          label: "使用冷却液"
+          default: true
+          required: false
+
+outputs:
+  default_format: ".nc"
+  supported_formats: [".nc", ".mpf", ".spf", ".txt"]
+  
+  files:
+    main_program:
+      template: "templates/main.j2"
+      filename_pattern: "{{program_name}}"
+      extension: ".nc"
+      description: "主加工程序"
+      enabled: true
+      is_default: true
+
+presets:
+  粗加工:
+    description: "粗加工参数预设"
+    parameters:
+      cutting_depth: 5
+      use_coolant: true
+  
+  精加工:
+    description: "精加工参数预设"
+    parameters:
+      cutting_depth: 0.5
+      use_coolant: true
+
+validation:
+  rules:
+    diameter_depth_check:
+      condition: "workpiece_diameter > cutting_depth * 5"
+      message: "切削深度不应超过工件直径的20%"
+      level: "warning"

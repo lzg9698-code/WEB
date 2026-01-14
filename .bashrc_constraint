@@ -1,0 +1,169 @@
+#!/bin/bash
+
+# 项目约束执行机制 - 自动加载
+# 此脚本确保在任何时候都严格遵守PROJECT_REQUIREMENTS.md文档约束
+
+# 检查是否在项目目录中
+if [ -f "PROJECT_REQUIREMENTS.md" ]; then
+    # 设置项目约束检查别名
+    alias check-constraints="./scripts/pre_commit_check.sh"
+    alias validate-doc="./scripts/validate_document.sh"
+    alias constraint-check="./scripts/constraint_check.sh"
+    
+    # 创建自动检查函数
+    auto_constraint_check() {
+        if [ -f "scripts/pre_commit_check.sh" ]; then
+            echo "🔒 自动执行约束检查..."
+            ./scripts/pre_commit_check.sh
+            if [ $? -ne 0 ]; then
+                echo "❌ 约束检查失败！请修复问题后再继续。"
+                return 1
+            fi
+        fi
+    }
+    
+    # 创建代码修改前自动检查函数
+    pre_edit_check() {
+        echo "🔍 代码修改前检查..."
+        if [ -f "scripts/pre_commit_check.sh" ]; then
+            ./scripts/pre_commit_check.sh
+            CHECK_RESULT=$?
+            if [ $CHECK_RESULT -ne 0 ]; then
+                echo ""
+                echo "🚫 约束检查失败，不能继续代码修改！"
+                echo "请先解决以下问题："
+                echo "1. 确保PROJECT_REQUIREMENTS.md文档正确"
+                echo "2. 修复代码违规问题"
+                echo "3. 确认修改符合文档要求"
+                echo ""
+                echo "修复完成后，运行: check-constraints"
+                return 1
+            fi
+        fi
+        echo "✅ 约束检查通过，可以开始代码修改"
+    }
+    
+    # 创建需求变更函数
+    update_requirements() {
+        echo "📝 更新项目需求文档..."
+        vim PROJECT_REQUIREMENTS.md
+        echo "🔍 验证更新后的文档..."
+        if [ -f "scripts/validate_document.sh" ]; then
+            ./scripts/validate_document.sh
+            if [ $? -eq 0 ]; then
+                echo "✅ 文档更新成功，可以继续代码修改"
+            else
+                echo "❌ 文档更新失败，请重新编辑"
+            fi
+        fi
+    }
+    
+    # 创建约束状态检查函数
+    constraint_status() {
+        echo "📊 约束执行状态检查"
+        echo "========================"
+        
+        if [ -f "PROJECT_REQUIREMENTS.md" ]; then
+            echo "✅ 项目需求文档: 存在"
+            echo "📄 文档版本: $(grep "本文档版本：" PROJECT_REQUIREMENTS.md | cut -d'：' -f2 | tr -d ' ')"
+            echo "📊 文档行数: $(wc -l < PROJECT_REQUIREMENTS.md)行"
+        else
+            echo "❌ 项目需求文档: 不存在"
+            return 1
+        fi
+        
+        if [ -d "scripts" ]; then
+            echo "✅ 约束脚本目录: 存在"
+            if [ -x "scripts/pre_commit_check.sh" ]; then
+                echo "✅ 预提交检查脚本: 可执行"
+            else
+                echo "❌ 预提交检查脚本: 不可执行"
+            fi
+        else
+            echo "❌ 约束脚本目录: 不存在"
+        fi
+        
+        echo "🔒 约束机制状态: 激活"
+        echo "📋 当前时间: $(date)"
+    }
+    
+    # 创建提醒函数
+    constraint_reminder() {
+        echo ""
+        echo "🚨 重要提醒："
+        echo "📋 严格遵循PROJECT_REQUIREMENTS.md文档约束"
+        echo "📝 需求变更 -> 先更新文档 -> 再修改代码"
+        echo "🔒 违反约束的代码将被拒绝"
+        echo "🔍 代码修改前请运行: pre_edit_check"
+        echo ""
+    }
+    
+    # 设置提示符前缀
+    PS1_PREFIX="[🔒约束] "
+    
+    # 在每个命令前显示提醒（可选，注释掉避免过于频繁）
+    # trap 'constraint_reminder' DEBUG
+    
+    # 显示约束激活信息
+    echo ""
+    echo "🔒 项目约束执行机制已激活"
+    echo "📋 严格遵循PROJECT_REQUIREMENTS.md文档"
+    constraint_reminder
+    
+    # 创建安全编辑函数
+    safe_edit() {
+        echo "🔍 执行编辑前约束检查..."
+        pre_edit_check
+        if [ $? -eq 0 ]; then
+            vim "$@"
+        else
+            echo "❌ 约束检查失败，编辑操作已取消"
+            return 1
+        fi
+    }
+    
+    # 重写常用编辑命令
+    alias vim='safe_edit'
+    alias nano='safe_edit'
+    alias code='safe_edit'
+    
+    # 添加到PATH（如果需要）
+    # export PATH="$PWD/scripts:$PATH"
+    
+fi
+
+# 创建全局约束检查函数
+global_constraint_check() {
+    echo "🌍 全局约束检查..."
+    
+    # 查找包含PROJECT_REQUIREMENTS.md的目录
+    PROJECT_DIRS=$(find . -name "PROJECT_REQUIREMENTS.md" -type f 2>/dev/null | while read file; do dirname "$file"; done)
+    
+    if [ -z "$PROJECT_DIRS" ]; then
+        echo "❌ 未找到包含PROJECT_REQUIREMENTS.md的项目目录"
+        return 1
+    fi
+    
+    for dir in $PROJECT_DIRS; do
+        echo ""
+        echo "📁 检查项目: $dir"
+        cd "$dir" || continue
+        
+        if [ -f "scripts/pre_commit_check.sh" ]; then
+            ./scripts/pre_commit_check.sh
+        else
+            echo "⚠️  项目缺少约束检查脚本"
+        fi
+        
+        cd - > /dev/null
+    done
+}
+
+# 导出函数
+export -f auto_constraint_check
+export -f pre_edit_check
+export -f update_requirements
+export -f constraint_status
+export -f safe_edit
+export -f global_constraint_check
+

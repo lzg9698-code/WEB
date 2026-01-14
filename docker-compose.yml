@@ -1,0 +1,59 @@
+# ========================================
+# 模板驱动的数控程序生成器 - Docker Compose配置
+# 严格遵循PROJECT_REQUIREMENTS.md文档约束
+# ========================================
+
+version: '3.8'
+
+services:
+  # 主应用服务
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nc-program-generator
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./templates:/home/lzg9698/my_project/mytool/templates
+      - ./output:/home/lzg9698/my_project/mytool/output
+      - ./logs:/home/lzg9698/my_project/mytool/logs
+    environment:
+      - FLASK_APP=app.py
+      - FLASK_ENV=production
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # 开发服务
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: dev
+    container_name: nc-program-generator-dev
+    ports:
+      - "5000:5000"
+      - "5173:5173"
+    volumes:
+      - .:/home/lzg9698/my_project/mytool
+      - /home/lzg9698/my_project/mytool/node_modules
+    environment:
+      - FLASK_APP=app.py
+      - FLASK_ENV=development
+      - VITE_DEV_SERVER_PORT=5173
+    command: ["sh", "-c", "python3 app.py & npm run dev -- --host 0.0.0.0"]
+
+# 网络配置
+networks:
+  default:
+    driver: bridge
+
+# 卷配置
+volumes:
+  templates:
+  output:
+  logs:

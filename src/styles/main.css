@@ -1,0 +1,419 @@
+/**
+ * 主样式文件
+ * 
+ * 严格遵循PROJECT_REQUIREMENTS.md文档约束
+ * 功能：定义应用全局样式和主题
+ */
+
+/* CSS变量定义 - 浅色主题 */
+:root {
+  /* 编辑器颜色 */
+  --vscode-editor-background: #ffffff;
+  --vscode-editor-foreground: #333333;
+  --vscode-editor-lineHighlightBackground: #f5f5f5;
+  --vscode-editor-selectionBackground: #add6ff;
+  --vscode-editor-inactiveSelectionBackground: #e5e5e5;
+  
+  /* 面板颜色 */
+  --vscode-panel-background: #f3f3f3;
+  --vscode-panel-border: #d4d4d4;
+  --vscode-panel-titleBar-background: #ececec;
+  --vscode-panel-titleBar-border: #d4d4d4;
+  
+  /* 侧边栏颜色 */
+  --vscode-sideBar-background: #fafafa;
+  --vscode-sideBar-border: #e0e0e0;
+  
+  /* 状态栏颜色 */
+  --vscode-statusBar-background: #007acc;
+  --vscode-statusBar-border: #005a9e;
+  --vscode-statusBar-foreground: #ffffff;
+  --vscode-statusBar-debuggingForeground: #4ec9b0;
+  
+  /* 标题栏颜色 */
+  --vscode-titleBar-background: #ececec;
+  --vscode-titleBar-border: #d4d4d4;
+  --vscode-titleBar-activeForeground: #333333;
+  --vscode-titleBar-inactiveForeground: #666666;
+  
+  /* 输入控件颜色 */
+  --vscode-input-background: #ffffff;
+  --vscode-input-foreground: #333333;
+  --vscode-input-border: #d4d4d4;
+  --vscode-input-placeholderForeground: #999999;
+  
+  /* 按钮颜色 */
+  --vscode-button-background: #e1e1e1;
+  --vscode-button-foreground: #333333;
+  --vscode-button-border: #d4d4d4;
+  --vscode-button-hoverBackground: #d4d4d4;
+  --vscode-button-secondaryBackground: #f3f3f3;
+  --vscode-button-secondaryForeground: #333333;
+  --vscode-button-secondaryBorder: #d4d4d4;
+  
+  /* 工具栏颜色 */
+  --vscode-toolbar-hoverBackground: #e8e8e8;
+  --vscode-toolbar-activeBackground: #d4d4d4;
+  
+  /* 列表颜色 */
+  --vscode-list-hoverBackground: #f0f0f0;
+  --vscode-list-activeSelectionBackground: #cce5ff;
+  --vscode-list-activeSelectionForeground: #000000;
+  
+  /* 选项卡颜色 */
+  --vscode-tabs-activeForeground: #333333;
+  --vscode-tabs-inactiveForeground: #666666;
+  --vscode-tabs-border: #d4d4d4;
+  --vscode-tabs-activeBackground: #ffffff;
+  --vscode-tabs-inactiveBackground: #f3f3f3;
+  
+  /* 进度条颜色 */
+  --vscode-progressBar-background: #0e639c;
+  --vscode-progressBar-foreground: #007acc;
+  
+  /* 输入验证颜色 */
+  --vscode-inputValidation-errorBackground: #f2dede;
+  --vscode-inputValidation-errorBorder: #ebccd1;
+  --vscode-inputValidation-warningBackground: #fcf8e3;
+  --vscode-inputValidation-warningBorder: #faebcc;
+  --vscode-inputValidation-infoBackground: #d9edf7;
+  --vscode-inputValidation-infoBorder: #bceff1;
+  
+  /* 错误和警告颜色 */
+  --vscode-errorForeground: #d32f2f;
+  --vscode-warningForeground: #f57c00;
+  --vscode-infoForeground: #1976d2;
+  --vscode-testing-iconPassed: #388e3c;
+  --vscode-testing-iconFailed: #d32f2f;
+  --vscode-testing-iconWarning: #f57c00;
+  --vscode-testing-iconError: #d32f2f;
+  --vscode-testing-iconSkipped: #9e9e9e;
+  
+  /* 图表颜色 */
+  --vscode-charts-red: #d32f2f;
+  --vscode-charts-orange: #f57c00;
+  --vscode-charts-yellow: #fbc02d;
+  --vscode-charts-green: #388e3c;
+  --vscode-charts-blue: #1976d2;
+  --vscode-charts-purple: #7b1fa2;
+  --vscode-charts-gray: #757575;
+  
+  /* 链接颜色 */
+  --vscode-textLink-foreground: #1976d2;
+  --vscode-textLink-activeForeground: #1565c0;
+  
+  /* 代码块颜色 */
+  --vscode-textCodeBlock-background: #f5f5f5;
+  
+  /* 终端颜色 */
+  --vscode-terminal-foreground: #333333;
+  --vscode-terminal-background: #ffffff;
+  --vscode-terminal-border: #d4d4d4;
+  
+  /* 菜单颜色 */
+  --vscode-menu-background: #ffffff;
+  --vscode-menu-foreground: #333333;
+  --vscode-menu-border: #d4d4d4;
+  --vscode-menu-selectionBackground: #cce5ff;
+  --vscode-menu-selectionForeground: #000000;
+  
+  /* 滚动条颜色 */
+  --vscode-scrollbar-slider-background: #c1c1c1;
+  --vscode-scrollbar-slider-hoverBackground: #a0a0a0;
+  --vscode-scrollbar-sliderActiveBackground: #9e9e9e;
+  --vscode-scrollbar-background: #f5f5f5;
+  
+  /* 其他颜色 */
+  --vscode-badge-background: #c4c4c4;
+  --vscode-badge-foreground: #333333;
+  --vscode-badge-border: transparent;
+  --vscode-focusBorder: #007acc;
+  --vscode-diffEditor-insertedTextBackground: #e6ffed;
+  --vscode-diffEditor-removedTextBackground: #ffeef0;
+}
+
+/* 暗色主题 */
+body.dark-theme {
+  /* 编辑器颜色 */
+  --vscode-editor-background: #1e1e1e;
+  --vscode-editor-foreground: #d4d4d4;
+  --vscode-editor-lineHighlightBackground: #2a2d2e;
+  --vscode-editor-selectionBackground: #264f78;
+  --vscode-editor-inactiveSelectionBackground: #3a3d41;
+  
+  /* 面板颜色 */
+  --vscode-panel-background: #252526;
+  --vscode-panel-border: #3c3c3c;
+  --vscode-panel-titleBar-background: #3c3c3c;
+  --vscode-panel-titleBar-border: #3c3c3c;
+  
+  /* 侧边栏颜色 */
+  --vscode-sideBar-background: #252526;
+  --vscode-sideBar-border: #3c3c3c;
+  
+  /* 状态栏颜色 */
+  --vscode-statusBar-background: #007acc;
+  --vscode-statusBar-border: #005a9e;
+  --vscode-statusBar-foreground: #ffffff;
+  --vscode-statusBar-debuggingForeground: #4ec9b0;
+  
+  /* 标题栏颜色 */
+  --vscode-titleBar-background: #3c3c3c;
+  --vscode-titleBar-border: #3c3c3c;
+  --vscode-titleBar-activeForeground: #ffffff;
+  --vscode-titleBar-inactiveForeground: #cccccc;
+  
+  /* 输入控件颜色 */
+  --vscode-input-background: #3c3c3c;
+  --vscode-input-foreground: #d4d4d4;
+  --vscode-input-border: #3c3c3c;
+  --vscode-input-placeholderForeground: #858585;
+  
+  /* 按钮颜色 */
+  --vscode-button-background: #0e639c;
+  --vscode-button-foreground: #ffffff;
+  --vscode-button-border: #0e639c;
+  --vscode-button-hoverBackground: #1177bb;
+  --vscode-button-secondaryBackground: #3c3c3c;
+  --vscode-button-secondaryForeground: #d4d4d4;
+  --vscode-button-secondaryBorder: #3c3c3c;
+  
+  /* 工具栏颜色 */
+  --vscode-toolbar-hoverBackground: #2a2d2e;
+  --vscode-toolbar-activeBackground: #3c3c3c;
+  
+  /* 列表颜色 */
+  --vscode-list-hoverBackground: #2a2d2e;
+  --vscode-list-activeSelectionBackground: #094771;
+  --vscode-list-activeSelectionForeground: #ffffff;
+  
+  /* 选项卡颜色 */
+  --vscode-tabs-activeForeground: #ffffff;
+  --vscode-tabs-inactiveForeground: #969696;
+  --vscode-tabs-border: #3c3c3c;
+  --vscode-tabs-activeBackground: #1e1e1e;
+  --vscode-tabs-inactiveBackground: #252526;
+  
+  /* 进度条颜色 */
+  --vscode-progressBar-background: #0e639c;
+  --vscode-progressBar-foreground: #007acc;
+  
+  /* 输入验证颜色 */
+  --vscode-inputValidation-errorBackground: #5a1d1d;
+  --vscode-inputValidation-errorBorder: #be1100;
+  --vscode-inputValidation-warningBackground: #5a4a1d;
+  --vscode-inputValidation-warningBorder: #b08900;
+  --vscode-inputValidation-infoBackground: #1d3a5a;
+  --vscode-inputValidation-infoBorder: #007acc;
+  
+  /* 错误和警告颜色 */
+  --vscode-errorForeground: #f14c4c;
+  --vscode-warningForeground: #cca700;
+  --vscode-infoForeground: #3794ff;
+  --vscode-testing-iconPassed: #89d185;
+  --vscode-testing-iconFailed: #f14c4c;
+  --vscode-testing-iconWarning: #cca700;
+  --vscode-testing-iconError: #f14c4c;
+  --vscode-testing-iconSkipped: #848484;
+  
+  /* 图表颜色 */
+  --vscode-charts-red: #f14c4c;
+  --vscode-charts-orange: #cc8833;
+  --vscode-charts-yellow: #cca700;
+  --vscode-charts-green: #89d185;
+  --vscode-charts-blue: #3794ff;
+  --vscode-charts-purple: #a37acc;
+  --vscode-charts-gray: #8e8e8e;
+  
+  /* 链接颜色 */
+  --vscode-textLink-foreground: #3794ff;
+  --vscode-textLink-activeForeground: #66b3ff;
+  
+  /* 代码块颜色 */
+  --vscode-textCodeBlock-background: #1e1e1e;
+  
+  /* 终端颜色 */
+  --vscode-terminal-foreground: #d4d4d4;
+  --vscode-terminal-background: #1e1e1e;
+  --vscode-terminal-border: #3c3c3c;
+  
+  /* 菜单颜色 */
+  --vscode-menu-background: #252526;
+  --vscode-menu-foreground: #d4d4d4;
+  --vscode-menu-border: #3c3c3c;
+  --vscode-menu-selectionBackground: #094771;
+  --vscode-menu-selectionForeground: #ffffff;
+  
+  /* 滚动条颜色 */
+  --vscode-scrollbar-slider-background: #424242;
+  --vscode-scrollbar-sliderHoverBackground: #4f4f4f;
+  --vscode-scrollbar-sliderActiveBackground: #555555;
+  --vscode-scrollbar-background: #1e1e1e;
+  
+  /* 其他颜色 */
+  --vscode-badge-background: #4f4f4f;
+  --vscode-badge-foreground: #d4d4d4;
+  --vscode-badge-border: transparent;
+  --vscode-focusBorder: #007acc;
+  --vscode-diffEditor-insertedTextBackground: #203424;
+  --vscode-diffEditor-removedTextBackground: #381010;
+}
+
+/* 全局样式重置 */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  background-color: var(--vscode-editor-background);
+  color: var(--vscode-editor-foreground);
+}
+
+#app {
+  height: 100%;
+}
+
+/* 滚动条样式 */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--vscode-scrollbar-background);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--vscode-scrollbar-slider-background);
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--vscode-scrollbar-sliderHoverBackground);
+}
+
+::-webkit-scrollbar-thumb:active {
+  background: var(--vscode-scrollbar-sliderActiveBackground);
+}
+
+/* 文本选择样式 */
+::selection {
+  background: var(--vscode-editor-selectionBackground);
+  color: var(--vscode-editor-foreground);
+}
+
+/* 聚焦样式 */
+:focus {
+  outline: 2px solid var(--vscode-focusBorder);
+  outline-offset: -2px;
+}
+
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--vscode-focusBorder);
+  outline-offset: -2px;
+}
+
+/* 禁用样式 */
+:disabled {
+  opacity: 0.5;
+  cursor: not-allowed !important;
+}
+
+/* 链接样式 */
+a {
+  color: var(--vscode-textLink-foreground);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--vscode-textLink-activeForeground);
+  text-decoration: underline;
+}
+
+/* 工具类 */
+.text-center { text-align: center; }
+.text-left { text-align: left; }
+.text-right { text-align: right; }
+
+.flex { display: flex; }
+.flex-col { flex-direction: column; }
+.flex-wrap { flex-wrap: wrap; }
+.items-center { align-items: center; }
+.justify-center { justify-content: center; }
+.justify-between { justify-content: space-between; }
+.gap-1 { gap: 4px; }
+.gap-2 { gap: 8px; }
+.gap-3 { gap: 12px; }
+.gap-4 { gap: 16px; }
+
+.w-full { width: 100%; }
+.h-full { height: 100%; }
+
+.overflow-hidden { overflow: hidden; }
+.overflow-auto { overflow: auto; }
+.overflow-x-auto { overflow-x: auto; }
+.overflow-y-auto { overflow-y: auto; }
+
+.rounded { border-radius: 4px; }
+.rounded-lg { border-radius: 8px; }
+.rounded-full { border-radius: 9999px; }
+
+.shadow { box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1); }
+.shadow-lg { box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); }
+
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Element Plus 主题覆盖 */
+.el-button {
+  border-radius: 4px !important;
+}
+
+.el-input__wrapper {
+  border-radius: 4px !important;
+}
+
+.el-select .el-input__wrapper {
+  border-radius: 4px !important;
+}
+
+.el-dialog {
+  border-radius: 8px !important;
+  overflow: hidden;
+}
+
+.el-message-box {
+  border-radius: 8px !important;
+}
+
+/* 动画 */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideIn {
+  from { transform: translateY(-10px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.2s ease-out;
+}
+
+.animate-slide-in {
+  animation: slideIn 0.2s ease-out;
+}
