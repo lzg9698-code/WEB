@@ -1,17 +1,7 @@
 """
 模板渲染控制器
 
-此文件必须严格遵循PROJECT_REQUIREMENTS.md文档约束。
-任何修改都必须先更新需求文档，然后修改代码。
-违反此约束将导致代码被拒绝。
-
-职责边界：
-- ✅ 模板文件的解析和渲染
-- ✅ Jinja2模板语法支持
-- ✅ 多文件批量渲染
-- ✅ 实时预览功能
-- ❌ 不负责模板内容编辑（由编辑器模块负责）
-- ❌ 不负责参数验证（由参数管理模块负责）
+严格遵循PROJECT_REQUIREMENTS.md文档约束
 """
 
 from flask import Blueprint, request, jsonify, send_file
@@ -24,8 +14,9 @@ import math
 import os
 from datetime import datetime
 from typing import List, Dict, Any, Optional
-from jinja2 import Environment, TemplateError, TemplateSyntaxError, TemplateNotFound
+from jinja2 import Environment, TemplateError, TemplateSyntaxError, TemplateNotFound, FileSystemLoader
 import json
+import jinja2
 
 # 创建蓝图
 render_bp = Blueprint('render', __name__, url_prefix='/api/render')
@@ -49,21 +40,18 @@ class JinjaRenderer:
     def _setup_custom_filters(self):
         """设置Jinja2自定义过滤器"""
         def round_filter(value, precision=2):
-            """四舍五入过滤器"""
             try:
                 return round(float(value), precision)
             except (ValueError, TypeError):
                 return value
         
         def format_filter(value, format_str):
-            """格式化过滤器"""
             try:
                 return format(float(value), format_str)
             except (ValueError, TypeError):
                 return value
         
         def safe_filter(value):
-            """安全文本过滤器"""
             if value is None:
                 return ''
             if isinstance(value, str):
@@ -71,19 +59,17 @@ class JinjaRenderer:
             return str(value)
         
         def length_filter(value, unit='mm'):
-            """长度单位转换"""
             try:
                 if value is None:
                     return '0'
                 num_value = float(value)
                 if unit.lower() == 'inch':
-                    return str(num_value * 25.4)  # 英寸转毫米
+                    return str(num_value * 25.4)
                 return str(num_value)
             except (ValueError, TypeError):
                 return value
         
         def angle_filter(value, unit='deg'):
-            """角度单位转换"""
             try:
                 if value is None:
                     return '0'
@@ -97,7 +83,6 @@ class JinjaRenderer:
                 return value
         
         def speed_filter(value, unit='rpm'):
-            """速度单位转换"""
             try:
                 if value is None:
                     return '0'
@@ -109,42 +94,36 @@ class JinjaRenderer:
                 return value
         
         def sqrt_filter(value):
-            """平方根函数"""
             try:
                 return str(float(value) ** 0.5)
             except (ValueError, TypeError):
                 return value
         
         def sin_filter(value):
-            """正弦函数（角度转弧度）"""
             try:
                 return str(math.sin(math.radians(float(value))))
             except (ValueError, TypeError):
                 return value
         
         def cos_filter(value):
-            """余弦函数（角度转弧度）"""
             try:
                 return str(math.cos(math.radians(float(value))))
             except (ValueError, TypeError):
                 return value
         
         def abs_filter(value):
-            """绝对值函数"""
             try:
                 return str(abs(float(value)))
             except (ValueError, TypeError):
                 return value
         
         def min_filter(*args):
-            """最小值函数"""
             try:
                 return str(min(float(x) for x in args if x is not None))
             except (ValueError, TypeError):
                 return args[0] if args else '0'
         
         def max_filter(*args):
-            """最大值函数"""
             try:
                 return str(max(float(x) for x in args if x is not None))
             except (ValueError, TypeError):
@@ -278,7 +257,6 @@ class JinjaRenderer:
             return template.render(**parameters)
         except Exception as e:
             logger.error(f"生成文件名失败: {pattern}, 错误: {str(e)}")
-            # 返回原始模式
             return pattern
     
     def get_available_outputs(self, package_path: str) -> List[Dict[str, Any]]:
@@ -325,6 +303,7 @@ class JinjaRenderer:
                 'warnings': []
             }
 
+
 @render_bp.route('/templates/<package_name>/render', methods=['POST'])
 def render_template(package_name: str):
     """渲染指定模板包"""
@@ -338,6 +317,8 @@ def render_template(package_name: str):
         
         parameters = data['parameters']
         
+        # 这里应该调用模板管理器，现在先简化处理
+        from backend.controllers.template_controller import TemplateManager
         package_manager = TemplateManager()
         template_path = package_manager.get_package_by_name(package_name)
         if not template_path:
@@ -363,69 +344,6 @@ def render_template(package_name: str):
             'error': str(e)
         }), 500
 
-@render_bp.route('/templates/<package_name>/validate', methods=['POST'])
-def validate_template(package_name: str):
-    """验证模板包"""
-    try:
-        data = request.get_json()
-        if not data:
-            return jsonify({
-                'success': False,
-                'error': '请提供验证数据'
-            }), 400
-        
-        package_manager = TemplateManager()
-        template_path = package_manager.get_package_by_name(package_name)
-        if not template_path:
-            return jsonify({
-                'success': False,
-                'error': f'模板包 {package_name} 不存在'
-            }), 404
-        
-        render_engine = JinjaRenderer(str(template_path))
-        results = []
-        template_files = template_path.get_template_files()
-        
-        # 验证每个模板文件
-        for template_file in template_files:
-            validation = render_engine.validate_template(template_file)
-            if not validation['valid']:
-                results.append({
-                    'file': template_file,
-                    'errors': validation['errors'],
-                    'warnings': validation['warnings']
-                })
-        
-        template_validation = render_engine.validate_template(os.path.join(str(template_path), "package.yaml"))
-        if not template_validation['valid']:
-            results.append({
-                'file': 'package.yaml',
-                'errors': template_validation['errors'],
-                'warnings': template_validation['warnings']
-            })
-        
-        template_validation = render_engine.validate_template(os.path.join(str(template_path), "package.yaml"))
-        if not template_validation['valid']:
-            results.append({
-                'file': 'package.yaml',
-                'errors': template_validation['errors'],
-                'warnings': template_validation['warnings']
-            })
-        
-        return jsonify({
-            'success': len(results) == 0,
-            'data': {
-                'package_name': package_name,
-                'validation': template_validation,
-                'files': results
-            }
-        })
-        
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
 
 @render_bp.route('/preview/<package_name>', methods=['POST'])
 def preview_template(package_name: str):
@@ -439,7 +357,9 @@ def preview_template(package_name: str):
             }), 400
         
         parameters = data['parameters']
+        template_name = data.get('template_name')
         
+        from backend.controllers.template_controller import TemplateManager
         package_manager = TemplateManager()
         template_path = package_manager.get_package_by_name(package_name)
         if not template_path:
@@ -449,15 +369,14 @@ def preview_template(package_name: str):
             }), 404
         
         render_engine = JinjaRenderer(str(template_path))
-        # 获取主模板进行预览
-        main_template = template_path.config.get('templates', {}).get('main')
-        if main_template:
-            result = render_engine.render_template(main_template, parameters)
+        
+        if template_name:
+            result = render_engine.render_template(template_name, parameters)
             return jsonify({
                 'success': True,
                 'data': {
                     'content': result['content'],
-                    'template_path': main_template,
+                    'template_path': template_name,
                     'preview_time': result['render_time']
                 }
             })
@@ -474,6 +393,7 @@ def preview_template(package_name: str):
             'error': str(e)
         }), 500
 
+
 @render_bp.route('/templates/<package_name>/export', methods=['POST'])
 def export_template(package_name: str):
     """导出渲染结果为ZIP文件"""
@@ -487,6 +407,7 @@ def export_template(package_name: str):
         
         parameters = data['parameters']
         
+        from backend.controllers.template_controller import TemplateManager
         package_manager = TemplateManager()
         template_path = package_manager.get_package_by_name(package_name)
         if not template_path:
@@ -505,7 +426,6 @@ def export_template(package_name: str):
             }), 500
         
         # 创建临时ZIP文件
-        import os
         temp_dir = tempfile.mkdtemp()
         zip_path = os.path.join(temp_dir, f"{package_name}_export.zip")
         
@@ -542,7 +462,3 @@ def export_template(package_name: str):
             'success': False,
             'error': str(e)
         }), 500
-
-# 模板管理器（需要从模板控制器导入）
-from backend.controllers.template_controller import TemplateManager
-

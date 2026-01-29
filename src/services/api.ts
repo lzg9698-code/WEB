@@ -205,6 +205,42 @@ export const renderApi = {
     );
     return response.data;
   },
+
+  // 预览模板
+  preview: (
+    packageName: string,
+    parameters: Record<string, any>,
+    templateName?: string,
+  ) => {
+    return api.post(`/render/preview/${packageName}`, {
+      parameters,
+      template_name: templateName,
+    });
+  },
+
+  // 自动预览模板
+  autoPreview: (
+    packageName: string,
+    templateContent: string,
+    parameters: Record<string, any>,
+  ) => {
+    return api.post(`/render/preview/${packageName}/auto`, {
+      template_content: templateContent,
+      parameters,
+    });
+  },
+
+  // 验证模板语法
+  validateSyntax: (packageName: string, templateContent: string) => {
+    return api.post(`/render/preview/${packageName}/validate`, {
+      template_content: templateContent,
+    });
+  },
+
+  // 获取模板包输出文件列表
+  getOutputs: (packageName: string) => {
+    return api.get(`/render/templates/${packageName}/outputs`);
+  },
 };
 
 // 系统API
