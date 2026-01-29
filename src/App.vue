@@ -119,32 +119,132 @@
 
         <!-- 参数管理模块 -->
         <div v-if="activeModule === 'parameter'" class="module-content">
-          <div class="module-header">
-            <h2>⚙️ 参数管理</h2>
-            <div class="module-actions">
+          <!-- 模板选择器 -->
+          <div class="parameter-header">
+            <div class="template-selector">
+              <span class="selector-label">📦 选择模板:</span>
+              <el-select
+                v-model="selectedTemplateForParameter"
+                placeholder="请选择模板"
+                class="template-select"
+                @change="onTemplateSelectForParameter"
+              >
+                <el-option
+                  v-for="pkg in templateStore.packages"
+                  :key="pkg.name"
+                  :value="pkg.name"
+                >
+                  <span style="display: flex; align-items: center; gap: 8px">
+                    <span>{{ pkg.icon }}</span>
+                    <span>{{ pkg.displayName }}</span>
+                    <el-tag size="small" :color="pkg.color" effect="dark">
+                      {{ pkg.category }}
+                    </el-tag>
+                  </span>
+                </el-option>
+              </el-select>
+              <el-button
+                @click="refreshParameters"
+                :loading="parameterStore.loading"
+              >
+                🔄 刷新
+              </el-button>
+            </div>
+
+            <!-- 当前模板信息 -->
+            <div v-if="currentParameterTemplate" class="current-template-info">
+              <span
+                class="template-icon"
+                :style="{ color: currentParameterTemplate.color }"
+              >
+                {{ currentParameterTemplate.icon }}
+              </span>
+              <div class="template-details">
+                <span class="template-name">{{
+                  currentParameterTemplate.displayName
+                }}</span>
+                <span class="template-meta">
+                  v{{ currentParameterTemplate.version }} ·
+                  {{ currentParameterTemplate.category }}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 模板为空时的提示 -->
+          <div v-if="!selectedTemplateForParameter" class="empty-state">
+            <div class="empty-icon">⚙️</div>
+            <h3>请选择一个模板</h3>
+            <p>从上方下拉菜单选择一个模板来配置参数</p>
+          </div>
+
+          <!-- 参数内容（选中模板后显示） -->
+          <div v-else class="parameter-content">
+            <!-- 操作按钮 -->
+            <div class="parameter-actions">
               <el-button
                 @click="resetParameters"
-                :disabled="!templateStore.currentPackage"
+                :loading="parameterStore.loading"
               >
                 🔄 重置参数
               </el-button>
               <el-button
                 @click="validateParameters"
                 type="primary"
-                :disabled="!templateStore.currentPackage"
+                :loading="parameterStore.loading"
               >
                 🧪 验证参数
               </el-button>
               <el-button
                 @click="calculateParameters"
-                :disabled="!templateStore.currentPackage"
+                :loading="parameterStore.loading"
               >
                 🧮 计算参数
               </el-button>
+              <el-button
+                @click="generatePreview"
+                :type="showPreview ? 'primary' : 'default'"
+                :loading="renderStore.isRendering"
+              >
+                👁️ 预览
+              </el-button>
+              <el-button
+                @click="exportRender"
+                :disabled="!renderStore.renderResult"
+              >
+                📦 导出
+              </el-button>
             </div>
-          </div>
 
-          <div v-if="templateStore.currentPackage" class="parameter-content">
+            <!-- 实时预览面板 -->
+            <div v-if="showPreview" class="preview-panel">
+              <div class="preview-header">
+                <h3>👁️ 实时预览</h3>
+                <el-button size="small" @click="showPreview = false">
+                  关闭
+                </el-button>
+              </div>
+              <div class="preview-content">
+                <RenderPreview
+                  v-if="renderStore.renderResult"
+                  :render-result="{
+                    template_name:
+                      renderStore.renderResult.package_path ||
+                      selectedTemplateForParameter,
+                    render_time: renderStore.renderResult.render_time,
+                    files: Object.values(
+                      renderStore.renderResult.results || {},
+                    ),
+                    errors: renderStore.renderResult.errors,
+                    logs: renderStore.renderResult.logs,
+                  }"
+                />
+                <div v-else class="preview-empty">
+                  <p>点击"预览"按钮生成渲染结果</p>
+                </div>
+              </div>
+            </div>
+
             <!-- 参数完成度 -->
             <div class="progress-section">
               <h3>参数完成度</h3>
@@ -238,24 +338,14 @@
               </div>
             </div>
           </div>
-
-          <div v-else class="empty-state">
-            <div class="empty-icon">⚙️</div>
-            <h3>请先选择一个模板包</h3>
-            <p>从模板管理模块中选择一个模板包来配置参数</p>
-          </div>
         </div>
 
         <!-- 编辑器模块 -->
         <div v-if="activeModule === 'editor'" class="module-content">
-          <div class="module-header">
-            <h2>📝 编辑器</h2>
-          </div>
-          <div class="empty-state">
-            <div class="empty-icon">📝</div>
-            <h3>编辑器模块开发中...</h3>
-            <p>即将支持模板文件和YAML配置文件编辑</p>
-          </div>
+          <EditorModule
+            @file-open="handleEditorFileOpen"
+            @save="handleEditorSave"
+          />
         </div>
 
         <!-- 渲染引擎模块 -->
@@ -371,15 +461,20 @@
  * 根组件 - 严格遵循PROJECT_REQUIREMENTS.md文档约束
  */
 
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, watch } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { useTemplateManagerStore } from "@/stores/templateManagerStore";
 import { useParameterManagerStore } from "@/stores/parameterManagerStore";
+import { useRenderStore } from "@/stores/renderStore";
 import TemplateManager from "@/components/TemplateManager/TemplateManager.vue";
+import EditorModule from "@/components/Editor/EditorModule.vue";
+import { RenderPreview } from "@/components/Render";
+import { renderApi } from "@/services/api";
 
 // Stores
 const templateStore = useTemplateManagerStore();
 const parameterStore = useParameterManagerStore();
+const renderStore = useRenderStore();
 
 // 响应式数据
 const activeModule = ref("template");
@@ -387,10 +482,22 @@ const systemHealthy = ref(true);
 const loading = ref(false);
 const systemInfoVisible = ref(false);
 const constraintInfoVisible = ref(false);
+const selectedTemplateForParameter = ref<string | null>(null);
+const showPreview = ref(false);
 
 // 计算属性
 const parameters = computed(() => parameterStore.parameters);
 const validation = computed(() => parameterStore.validation);
+
+// 当前参数管理的模板信息
+const currentParameterTemplate = computed(() => {
+  if (!selectedTemplateForParameter.value) return null;
+  return (
+    templateStore.packages.find(
+      (p) => p.name === selectedTemplateForParameter.value,
+    ) || null
+  );
+});
 
 // 初始化
 onMounted(async () => {
@@ -400,6 +507,17 @@ onMounted(async () => {
 
   await initializeApp();
 });
+
+// 监听参数变化，自动生成预览
+watch(
+  () => parameterStore.parameters,
+  () => {
+    if (showPreview.value) {
+      autoGeneratePreview();
+    }
+  },
+  { deep: true },
+);
 
 // 初始化应用
 const initializeApp = async () => {
@@ -415,9 +533,43 @@ const initializeApp = async () => {
 };
 
 // 切换模块
-const switchModule = (module: string) => {
+const switchModule = async (module: string) => {
   activeModule.value = module;
   console.log(`🔒 切换到模块: ${module}`);
+};
+
+// 选择参数管理的模板
+const onTemplateSelectForParameter = async (packageName: string | null) => {
+  if (!packageName) {
+    selectedTemplateForParameter.value = null;
+    return;
+  }
+
+  console.log(`🔒 参数管理选择模板: ${packageName}`);
+
+  // 加载参数配置
+  try {
+    await parameterStore.loadParameters(packageName);
+    console.log(`✅ 已加载模板 "${packageName}" 的参数配置`);
+  } catch (error) {
+    console.error("❌ 加载参数配置失败:", error);
+    ElMessage.error("加载参数配置失败");
+  }
+};
+
+// 刷新参数
+const refreshParameters = async () => {
+  if (!selectedTemplateForParameter.value) {
+    ElMessage.warning("请先选择一个模板");
+    return;
+  }
+
+  try {
+    await parameterStore.loadParameters(selectedTemplateForParameter.value);
+    ElMessage.success("参数已刷新");
+  } catch (error) {
+    ElMessage.error("刷新参数失败");
+  }
 };
 
 // 更新参数
@@ -427,16 +579,24 @@ const updateParameter = (paramKey: string, value: any) => {
 
 // 重置参数
 const resetParameters = () => {
+  if (!selectedTemplateForParameter.value) {
+    ElMessage.warning("请先选择一个模板");
+    return;
+  }
+
   parameterStore.resetParameters();
   ElMessage.success("参数已重置");
 };
 
 // 验证参数
 const validateParameters = async () => {
-  if (!templateStore.currentPackageName) return;
+  if (!selectedTemplateForParameter.value) {
+    ElMessage.warning("请先选择一个模板");
+    return;
+  }
 
   try {
-    await parameterStore.validateParameters(templateStore.currentPackageName);
+    await parameterStore.validateParameters(selectedTemplateForParameter.value);
 
     if (parameterStore.isValid) {
       ElMessage.success("参数验证通过");
@@ -450,13 +610,104 @@ const validateParameters = async () => {
 
 // 计算参数
 const calculateParameters = async () => {
-  if (!templateStore.currentPackageName) return;
+  if (!selectedTemplateForParameter.value) {
+    ElMessage.warning("请先选择一个模板");
+    return;
+  }
 
   try {
-    await parameterStore.calculateParameters(templateStore.currentPackageName);
+    await parameterStore.calculateParameters(
+      selectedTemplateForParameter.value,
+    );
     ElMessage.success("派生参数计算完成");
   } catch (error) {
     ElMessage.error("参数计算异常");
+  }
+};
+
+// 生成预览
+const generatePreview = async () => {
+  if (!selectedTemplateForParameter.value) {
+    ElMessage.warning("请先选择一个模板");
+    return;
+  }
+
+  showPreview.value = true;
+  try {
+    await renderStore.startRender(
+      selectedTemplateForParameter.value,
+      parameterStore.parameters,
+    );
+  } catch (error) {
+    ElMessage.error("预览生成失败");
+  }
+};
+
+// 防抖定时器
+let previewDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+// 自动生成预览（防抖）
+const autoGeneratePreview = () => {
+  if (!showPreview.value || !selectedTemplateForParameter.value) return;
+
+  if (previewDebounceTimer) {
+    clearTimeout(previewDebounceTimer);
+  }
+
+  previewDebounceTimer = setTimeout(async () => {
+    try {
+      await renderStore.startRender(
+        selectedTemplateForParameter.value!,
+        parameterStore.parameters,
+      );
+    } catch (error) {
+      // 静默失败，不显示错误提示
+      console.log("自动预览失败:", error);
+    }
+  }, 1500); // 1.5秒防抖
+};
+
+// 导出渲染结果
+const exportRender = async () => {
+  if (!renderStore.renderResult || !selectedTemplateForParameter.value) {
+    ElMessage.warning("没有可导出的渲染结果");
+    return;
+  }
+
+  try {
+    const blob = await renderApi.export(
+      selectedTemplateForParameter.value,
+      parameterStore.parameters,
+    );
+
+    // 下载文件
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${selectedTemplateForParameter.value}_${new Date().toISOString().slice(0, 19).replace(/[:-]/g, "")}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    ElMessage.success("导出成功");
+  } catch (error) {
+    ElMessage.error("导出失败");
+  }
+};
+
+// 模板选择事件处理
+const onTemplateSelected = async (template: any) => {
+  console.log(`🔒 App.vue 收到模板选择事件: ${template.displayName}`);
+
+  // 如果当前在参数管理模块，自动加载参数
+  if (activeModule.value === "parameter") {
+    try {
+      await parameterStore.loadParameters(template.name);
+      console.log(`✅ 已加载模板 "${template.name}" 的参数配置`);
+    } catch (error) {
+      console.error("❌ 加载参数配置失败:", error);
+    }
   }
 };
 
@@ -481,6 +732,15 @@ const showSystemInfo = () => {
 // 显示约束信息
 const showConstraintInfo = () => {
   constraintInfoVisible.value = true;
+};
+
+// 编辑器事件处理
+const handleEditorFileOpen = (path: string) => {
+  console.log(`📝 编辑器打开文件: ${path}`);
+};
+
+const handleEditorSave = (path: string, content: string) => {
+  console.log(`📝 编辑器保存文件: ${path}`);
 };
 </script>
 
@@ -856,5 +1116,132 @@ const showConstraintInfo = () => {
 .constraint-rules li {
   margin-bottom: 0.5rem;
   color: #666;
+}
+
+/* 参数管理模块样式 */
+.parameter-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem;
+  background: white;
+  border-radius: 12px;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.template-selector {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.selector-label {
+  font-weight: 500;
+  color: #2c3e50;
+  white-space: nowrap;
+}
+
+.template-select {
+  width: 280px;
+}
+
+.current-template-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 1rem;
+  background: #f8f9fa;
+  border-radius: 8px;
+}
+
+.current-template-info .template-icon {
+  font-size: 1.5rem;
+}
+
+.current-template-info .template-details {
+  display: flex;
+  flex-direction: column;
+}
+
+.current-template-info .template-name {
+  font-weight: 600;
+  color: #2c3e50;
+  font-size: 0.875rem;
+}
+
+.current-template-info .template-meta {
+  font-size: 0.75rem;
+  color: #666;
+}
+
+.parameter-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+/* 预览面板样式 */
+.preview-panel {
+  margin-top: 1rem;
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e4e7ed;
+}
+
+.preview-panel .preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  background: #f8f9fa;
+  border-bottom: 1px solid #e4e7ed;
+}
+
+.preview-panel .preview-header h3 {
+  margin: 0;
+  color: #2c3e50;
+  font-size: 1.125rem;
+}
+
+.preview-panel .preview-content {
+  padding: 1rem;
+  max-height: 500px;
+  overflow: auto;
+}
+
+.preview-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem;
+  text-align: center;
+  color: #666;
+}
+
+.preview-empty p {
+  margin-bottom: 1rem;
+}
+
+@media (max-width: 768px) {
+  .parameter-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .template-selector {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .template-select {
+    width: 100%;
+  }
 }
 </style>

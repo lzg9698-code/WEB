@@ -11,15 +11,23 @@
           </el-tag>
         </div>
       </div>
-      
+
       <div class="header-actions">
         <el-button @click="resetAllParameters" :disabled="!currentTemplate">
           🔄 重置全部
         </el-button>
-        <el-button @click="validateAllParameters" :disabled="!currentTemplate" type="warning">
+        <el-button
+          @click="validateAllParameters"
+          :disabled="!currentTemplate"
+          type="warning"
+        >
           🧪 验证全部
         </el-button>
-        <el-button @click="calculateAllParameters" :disabled="!currentTemplate" type="primary">
+        <el-button
+          @click="calculateAllParameters"
+          :disabled="!currentTemplate"
+          type="primary"
+        >
           🧮 计算全部
         </el-button>
         <el-button @click="exportParameters" :disabled="!currentTemplate">
@@ -28,57 +36,78 @@
         <el-button @click="importParameters" :disabled="!currentTemplate">
           📥 导入参数
         </el-button>
+        <el-button
+          @click="togglePreview"
+          :type="showPreview ? 'primary' : 'default'"
+          :disabled="!currentTemplate"
+        >
+          👁️ 预览
+        </el-button>
         <el-dropdown @command="handleMoreActions">
           <el-button>
             更多 <el-icon class="el-icon--right"><arrow-down /></el-icon>
           </el-button>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item command="save-preset">💾 保存为预设</el-dropdown-item>
-              <el-dropdown-item command="load-preset">📂 加载预设</el-dropdown-item>
-              <el-dropdown-item command="clear-all" divided>🗑️ 清空所有</el-dropdown-item>
+              <el-dropdown-item command="save-preset"
+                >💾 保存为预设</el-dropdown-item
+              >
+              <el-dropdown-item command="load-preset"
+                >📂 加载预设</el-dropdown-item
+              >
+              <el-dropdown-item command="clear-all" divided
+                >🗑️ 清空所有</el-dropdown-item
+              >
             </el-dropdown-menu>
           </template>
         </el-dropdown>
       </div>
     </div>
-    
+
     <!-- 参数概览 -->
     <div class="parameter-overview" v-if="currentTemplate">
       <div class="overview-cards">
         <div class="overview-card">
           <div class="card-icon">📊</div>
           <div class="card-content">
-            <div class="card-value">{{ parameterStore.flatParameters.length }}</div>
+            <div class="card-value">
+              {{ parameterStore.flatParameters.length }}
+            </div>
             <div class="card-label">总参数</div>
           </div>
         </div>
-        
+
         <div class="overview-card">
           <div class="card-icon">✅</div>
           <div class="card-content">
-            <div class="card-value">{{ parameterStore.filledParameters.length }}</div>
+            <div class="card-value">
+              {{ parameterStore.filledParameters.length }}
+            </div>
             <div class="card-label">已填写</div>
           </div>
         </div>
-        
+
         <div class="overview-card">
           <div class="card-icon">⚠️</div>
           <div class="card-content">
-            <div class="card-value">{{ parameterStore.requiredParameters.length }}</div>
+            <div class="card-value">
+              {{ parameterStore.requiredParameters.length }}
+            </div>
             <div class="card-label">必填参数</div>
           </div>
         </div>
-        
+
         <div class="overview-card">
           <div class="card-icon">📈</div>
           <div class="card-content">
-            <div class="card-value">{{ parameterStore.completionPercentage }}%</div>
+            <div class="card-value">
+              {{ parameterStore.completionPercentage }}%
+            </div>
             <div class="card-label">完成度</div>
           </div>
         </div>
       </div>
-      
+
       <!-- 进度条 -->
       <div class="progress-section">
         <div class="progress-header">
@@ -93,7 +122,7 @@
             </span>
           </span>
         </div>
-        <el-progress 
+        <el-progress
           :percentage="parameterStore.completionPercentage"
           :status="parameterStore.isValid ? 'success' : 'exception'"
           :stroke-width="12"
@@ -101,9 +130,75 @@
         />
       </div>
     </div>
-    
+
+    <!-- 渲染操作区 -->
+    <div v-if="currentTemplate" class="render-actions">
+      <div class="render-actions-header">
+        <h3>🎨 模板渲染</h3>
+        <el-button size="small" @click="togglePreview">
+          {{ showPreview ? "隐藏" : "显示" }}预览面板
+        </el-button>
+      </div>
+      <div class="render-buttons">
+        <el-button
+          type="success"
+          size="large"
+          @click="generatePreview"
+          :loading="renderStore.isRendering"
+          :disabled="!currentTemplate || renderStore.isRendering"
+        >
+          🎨 生成程序预览
+        </el-button>
+        <el-button
+          type="warning"
+          size="large"
+          @click="generateNCFile"
+          :loading="renderStore.isRendering"
+          :disabled="
+            !currentTemplate ||
+            !parameterStore.isValid ||
+            renderStore.isRendering
+          "
+        >
+          💾 生成NC程序
+        </el-button>
+        <el-button
+          type="info"
+          size="large"
+          @click="validateAndRender"
+          :loading="renderStore.isRendering"
+          :disabled="!currentTemplate || renderStore.isRendering"
+        >
+          🧪 验证并渲染
+        </el-button>
+      </div>
+      <div
+        class="render-status"
+        v-if="renderStore.renderResult || renderStore.error"
+      >
+        <el-alert
+          v-if="renderStore.error"
+          :title="renderStore.error"
+          type="error"
+          show-icon
+          :closable="false"
+        />
+        <el-alert
+          v-else-if="renderStore.renderResult"
+          title="渲染成功"
+          :description="`生成 ${Object.keys(renderStore.renderResult.results || {}).length} 个文件，耗时 ${renderStore.renderResult.render_time}ms`"
+          type="success"
+          show-icon
+          :closable="false"
+        />
+      </div>
+    </div>
+
     <!-- 参数分组 -->
-    <div class="parameter-groups" v-if="currentTemplate && parameterStore.parameterGroups.length > 0">
+    <div
+      class="parameter-groups"
+      v-if="currentTemplate && parameterStore.parameterGroups.length > 0"
+    >
       <div class="groups-header">
         <h3>📋 参数分组</h3>
         <div class="group-controls">
@@ -115,7 +210,7 @@
           </el-button>
         </div>
       </div>
-      
+
       <div class="groups-container">
         <ParameterGroup
           v-for="group in parameterStore.parameterGroups"
@@ -129,7 +224,7 @@
         />
       </div>
     </div>
-    
+
     <!-- 空状态 -->
     <div v-else class="empty-state">
       <div class="empty-icon">⚙️</div>
@@ -139,14 +234,17 @@
         去选择模板包
       </el-button>
     </div>
-    
+
     <!-- 快速操作浮窗 -->
     <div v-if="currentTemplate && !isValid" class="floating-actions">
       <div class="floating-card">
         <h4>⚠️ 参数验证失败</h4>
         <p>请修正以下问题：</p>
         <ul>
-          <li v-for="(error, key) in parameterStore.validation.errors" :key="key">
+          <li
+            v-for="(error, key) in parameterStore.validation.errors"
+            :key="key"
+          >
             {{ getParameterLabel(key) }}: {{ error }}
           </li>
         </ul>
@@ -155,22 +253,30 @@
         </el-button>
       </div>
     </div>
-    
+
     <!-- 预设管理对话框 -->
-    <el-dialog v-model="presetDialogVisible" title="💾 参数预设管理" width="600px">
+    <el-dialog
+      v-model="presetDialogVisible"
+      title="💾 参数预设管理"
+      width="600px"
+    >
       <div class="preset-dialog">
         <div class="preset-section">
           <h4>保存当前参数</h4>
           <el-input
             v-model="newPresetName"
             placeholder="输入预设名称"
-            style="margin-bottom: 1rem;"
+            style="margin-bottom: 1rem"
           />
-          <el-button @click="savePreset" type="primary" :disabled="!newPresetName">
+          <el-button
+            @click="savePreset"
+            type="primary"
+            :disabled="!newPresetName"
+          >
             保存预设
           </el-button>
         </div>
-        
+
         <div class="preset-section">
           <h4>已保存的预设</h4>
           <div class="preset-list">
@@ -187,7 +293,11 @@
                 <el-button size="small" @click="loadPreset(preset)">
                   📂 加载
                 </el-button>
-                <el-button size="small" @click="deletePreset(preset)" type="danger">
+                <el-button
+                  size="small"
+                  @click="deletePreset(preset)"
+                  type="danger"
+                >
                   🗑️ 删除
                 </el-button>
               </div>
@@ -196,7 +306,7 @@
         </div>
       </div>
     </el-dialog>
-    
+
     <!-- 导入参数对话框 -->
     <el-dialog v-model="importDialogVisible" title="📥 导入参数" width="500px">
       <div class="import-dialog">
@@ -210,19 +320,19 @@
         >
           <el-button type="primary">选择文件</el-button>
           <template #tip>
-            <div class="el-upload__tip">
-              只能上传.json格式的参数文件
-            </div>
+            <div class="el-upload__tip">只能上传.json格式的参数文件</div>
           </template>
         </el-upload>
-        
+
         <div v-if="selectedFile" class="file-info">
           <h4>文件信息</h4>
           <p><strong>文件名:</strong> {{ selectedFile.name }}</p>
-          <p><strong>文件大小:</strong> {{ formatFileSize(selectedFile.size) }}</p>
+          <p>
+            <strong>文件大小:</strong> {{ formatFileSize(selectedFile.size) }}
+          </p>
         </div>
       </div>
-      
+
       <template #footer>
         <el-button @click="importDialogVisible = false">取消</el-button>
         <el-button type="primary" @click="confirmImport" :loading="importing">
@@ -230,280 +340,401 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- 实时预览面板 -->
+    <div v-if="showPreview && currentTemplate" class="preview-panel">
+      <div class="preview-header">
+        <h3>👁️ 实时预览</h3>
+        <el-button size="small" @click="showPreview = false">关闭</el-button>
+      </div>
+      <div class="preview-content">
+        <RenderPreview
+          v-if="renderStore.renderResult"
+          :render-result="{
+            template_name:
+              renderStore.renderResult.package_path || currentTemplate.name,
+            render_time: renderStore.renderResult.render_time,
+            files: Object.values(renderStore.renderResult.results || {}),
+            errors: renderStore.renderResult.errors,
+            logs: renderStore.renderResult.logs,
+          }"
+        />
+        <div v-else class="preview-empty">
+          <p>暂无预览数据</p>
+          <el-button
+            type="primary"
+            @click="generatePreview"
+            :loading="renderStore.isRendering"
+            :disabled="!props.currentTemplate"
+          >
+            🎨 生成预览
+          </el-button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 /**
  * 参数管理主组件
- * 
+ *
  * 此文件必须严格遵循PROJECT_REQUIREMENTS.md文档约束。
  * 任何修改都必须先更新需求文档，然后修改代码。
  * 违反此约束将导致代码被拒绝。
  */
 
-import { ref, computed, onMounted, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowDown } from '@element-plus/icons-vue'
-import { useTemplateStore } from '@/stores/templateStore'
-import { useParameterStore } from '@/stores/parameterStore'
-import ParameterGroup from './ParameterGroup.vue'
-import type { TemplatePackage } from '@/services/api'
+import { ref, computed, onMounted, watch } from "vue";
+import { ElMessage, ElMessageBox } from "element-plus";
+import { ArrowDown } from "@element-plus/icons-vue";
+import { useTemplateStore } from "@/stores/templateStore";
+import { useParameterStore } from "@/stores/parameterStore";
+import { useRenderStore } from "@/stores/renderStore";
+import ParameterGroup from "./ParameterGroup.vue";
+import { RenderPreview } from "@/components/Render";
+import type { TemplatePackage } from "@/services/api";
 
 // Props
 interface Props {
-  currentTemplate: TemplatePackage | null
+  currentTemplate: TemplatePackage | null;
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  currentTemplate: null
-})
+  currentTemplate: null,
+});
 
 // Emits
 const emit = defineEmits<{
-  'select-template': []
-}>()
+  "select-template": [];
+}>();
 
 // Stores
-const templateStore = useTemplateStore()
-const parameterStore = useParameterStore()
+const templateStore = useTemplateStore();
+const parameterStore = useParameterStore();
+const renderStore = useRenderStore();
 
 // 响应式数据
-const loading = ref(false)
-const importing = ref(false)
-const presetDialogVisible = ref(false)
-const importDialogVisible = ref(false)
-const newPresetName = ref('')
-const selectedFile = ref<File | null>(null)
-const presets = ref<any[]>([])
+const loading = ref(false);
+const importing = ref(false);
+const presetDialogVisible = ref(false);
+const importDialogVisible = ref(false);
+const newPresetName = ref("");
+const selectedFile = ref<File | null>(null);
+const presets = ref<any[]>([]);
+const showPreview = ref(false);
 
 // 计算属性
-const isValid = computed(() => parameterStore.isValid)
+const isValid = computed(() => parameterStore.isValid);
 
 // 方法
 const resetAllParameters = async () => {
   try {
     await ElMessageBox.confirm(
-      '确定要重置所有参数吗？此操作不可撤销。',
-      '重置确认',
+      "确定要重置所有参数吗？此操作不可撤销。",
+      "重置确认",
       {
-        confirmButtonText: '确定',
-        cancelButtonText: '取消',
-        type: 'warning',
-      }
-    )
-    
-    parameterStore.resetParameters()
-    ElMessage.success('所有参数已重置')
+        confirmButtonText: "确定",
+        cancelButtonText: "取消",
+        type: "warning",
+      },
+    );
+
+    parameterStore.resetParameters();
+    ElMessage.success("所有参数已重置");
   } catch {
     // 用户取消
   }
-}
+};
 
 const validateAllParameters = async () => {
-  if (!props.currentTemplate) return
-  
-  loading.value = true
+  if (!props.currentTemplate) return;
+
+  loading.value = true;
   try {
-    await parameterStore.validateParameters(props.currentTemplate.name)
-    
+    await parameterStore.validateParameters(props.currentTemplate.name);
+
     if (parameterStore.isValid) {
-      ElMessage.success('参数验证通过')
+      ElMessage.success("参数验证通过");
     } else {
-      ElMessage.warning(`参数验证失败: ${parameterStore.errorCount} 个错误`)
+      ElMessage.warning(`参数验证失败: ${parameterStore.errorCount} 个错误`);
     }
   } catch (error) {
-    ElMessage.error('参数验证异常')
+    ElMessage.error("参数验证异常");
   } finally {
-    loading.value = false
+    loading.value = false;
   }
-}
+};
 
 const calculateAllParameters = async () => {
-  if (!props.currentTemplate) return
-  
-  loading.value = true
+  if (!props.currentTemplate) return;
+
+  loading.value = true;
   try {
-    await parameterStore.calculateParameters(props.currentTemplate.name)
-    ElMessage.success('派生参数计算完成')
+    await parameterStore.calculateParameters(props.currentTemplate.name);
+    ElMessage.success("派生参数计算完成");
   } catch (error) {
-    ElMessage.error('参数计算异常')
+    ElMessage.error("参数计算异常");
   } finally {
-    loading.value = false
+    loading.value = false;
   }
-}
+};
 
 const exportParameters = () => {
-  if (!props.currentTemplate) return
-  
+  if (!props.currentTemplate) return;
+
   try {
     const data = {
       template: props.currentTemplate.name,
       parameters: parameterStore.parameters,
-      timestamp: new Date().toISOString()
-    }
-    
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${props.currentTemplate.name}_parameters.json`
-    a.click()
-    URL.revokeObjectURL(url)
-    
-    ElMessage.success('参数已导出')
+      timestamp: new Date().toISOString(),
+    };
+
+    const blob = new Blob([JSON.stringify(data, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${props.currentTemplate.name}_parameters.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+
+    ElMessage.success("参数已导出");
   } catch (error) {
-    ElMessage.error('导出失败')
+    ElMessage.error("导出失败");
   }
-}
+};
 
 const importParameters = () => {
-  importDialogVisible.value = true
-  selectedFile.value = null
-}
+  importDialogVisible.value = true;
+  selectedFile.value = null;
+};
 
 const handleFileSelect = (file: any) => {
-  selectedFile.value = file.raw
-}
+  selectedFile.value = file.raw;
+};
 
 const confirmImport = async () => {
   if (!selectedFile.value) {
-    ElMessage.warning('请选择要导入的文件')
-    return
+    ElMessage.warning("请选择要导入的文件");
+    return;
   }
 
-  importing.value = true
+  importing.value = true;
   try {
-    const text = await selectedFile.value.text()
-    const data = JSON.parse(text)
-    
+    const text = await selectedFile.value.text();
+    const data = JSON.parse(text);
+
     if (data.parameters) {
-      parameterStore.updateParameters(data.parameters)
-      ElMessage.success('参数导入成功')
-      importDialogVisible.value = false
+      parameterStore.updateParameters(data.parameters);
+      ElMessage.success("参数导入成功");
+      importDialogVisible.value = false;
     } else {
-      ElMessage.error('文件格式错误')
+      ElMessage.error("文件格式错误");
     }
   } catch (error) {
-    ElMessage.error('导入失败')
+    ElMessage.error("导入失败");
   } finally {
-    importing.value = false
-    selectedFile.value = null
+    importing.value = false;
+    selectedFile.value = null;
   }
-}
+};
 
 const handleMoreActions = async (command: string) => {
   switch (command) {
-    case 'save-preset':
-      presetDialogVisible.value = true
-      break
-    case 'load-preset':
-      presetDialogVisible.value = true
-      break
-    case 'clear-all':
-      await resetAllParameters()
-      break
+    case "save-preset":
+      presetDialogVisible.value = true;
+      break;
+    case "load-preset":
+      presetDialogVisible.value = true;
+      break;
+    case "clear-all":
+      await resetAllParameters();
+      break;
   }
-}
+};
 
 const savePreset = () => {
   if (!newPresetName.value) {
-    ElMessage.warning('请输入预设名称')
-    return
+    ElMessage.warning("请输入预设名称");
+    return;
   }
 
   const preset = {
     name: newPresetName.value,
     parameters: parameterStore.parameters,
     template: props.currentTemplate?.name,
-    createdAt: new Date().toLocaleString()
-  }
+    createdAt: new Date().toLocaleString(),
+  };
 
-  presets.value.push(preset)
-  localStorage.setItem('parameter_presets', JSON.stringify(presets.value))
-  
-  ElMessage.success('预设保存成功')
-  newPresetName.value = ''
-}
+  presets.value.push(preset);
+  localStorage.setItem("parameter_presets", JSON.stringify(presets.value));
+
+  ElMessage.success("预设保存成功");
+  newPresetName.value = "";
+};
 
 const loadPreset = (preset: any) => {
-  parameterStore.updateParameters(preset.parameters)
-  ElMessage.success(`预设 "${preset.name}" 已加载`)
-}
+  parameterStore.updateParameters(preset.parameters);
+  ElMessage.success(`预设 "${preset.name}" 已加载`);
+};
 
 const deletePreset = async (preset: any) => {
   try {
     await ElMessageBox.confirm(
       `确定要删除预设 "${preset.name}" 吗？`,
-      '删除确认',
+      "删除确认",
       {
-        confirmButtonText: '确定',
-        cancelButtonText: '取消',
-        type: 'warning',
-      }
-    )
-    
-    const index = presets.value.findIndex(p => p.name === preset.name)
+        confirmButtonText: "确定",
+        cancelButtonText: "取消",
+        type: "warning",
+      },
+    );
+
+    const index = presets.value.findIndex((p) => p.name === preset.name);
     if (index > -1) {
-      presets.value.splice(index, 1)
-      localStorage.setItem('parameter_presets', JSON.stringify(presets.value))
-      ElMessage.success('预设已删除')
+      presets.value.splice(index, 1);
+      localStorage.setItem("parameter_presets", JSON.stringify(presets.value));
+      ElMessage.success("预设已删除");
     }
   } catch {
     // 用户取消
   }
-}
+};
 
 const expandAllGroups = () => {
-  // TODO: 实现展开所有参数组
-  ElMessage.info('展开所有组功能开发中...')
-}
+  parameterStore.parameterGroups.forEach((group: any) => {
+    const groupElement = document.querySelector(`[data-group="${group.key}"]`);
+    if (groupElement) {
+      const collapseBtn = groupElement.querySelector(
+        ".el-button",
+      ) as HTMLElement;
+      if (collapseBtn && collapseBtn.textContent?.includes("▲")) {
+        collapseBtn.click();
+      }
+    }
+  });
+  ElMessage.success("已展开所有参数组");
+};
 
 const collapseAllGroups = () => {
-  // TODO: 实现折叠所有参数组
-  ElMessage.info('折叠所有组功能开发中...')
-}
+  parameterStore.parameterGroups.forEach((group: any) => {
+    const groupElement = document.querySelector(`[data-group="${group.key}"]`);
+    if (groupElement) {
+      const collapseBtn = groupElement.querySelector(
+        ".el-button",
+      ) as HTMLElement;
+      if (collapseBtn && collapseBtn.textContent?.includes("▼")) {
+        collapseBtn.click();
+      }
+    }
+  });
+  ElMessage.success("已折叠所有参数组");
+};
 
 const handleGroupUpdate = (value: Record<string, any>) => {
-  parameterStore.updateParameters(value)
-}
+  parameterStore.updateParameters(value);
+};
 
 const handleGroupChange = (groupKey: string, value: any, validation: any) => {
-  console.log(`参数组变更: ${groupKey}`, value, validation)
-}
+  console.log(`参数组变更: ${groupKey}`, value, validation);
+};
 
 const getParameterLabel = (key: string): string => {
-  const param = parameterStore.flatParameters.find(p => p.key === key)
-  return param ? param.label : key
-}
+  const param = parameterStore.flatParameters.find((p) => p.key === key);
+  return param ? param.label : key;
+};
 
 const formatFileSize = (bytes: number): string => {
-  if (bytes === 0) return '0 Bytes'
-  const k = 1024
-  const sizes = ['Bytes', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
-}
+  if (bytes === 0) return "0 Bytes";
+  const k = 1024;
+  const sizes = ["Bytes", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+};
+
+// 预览相关方法
+const togglePreview = () => {
+  showPreview.value = !showPreview.value;
+  if (showPreview.value && !renderStore.renderResult) {
+    generatePreview();
+  }
+};
+
+const generatePreview = async () => {
+  if (!props.currentTemplate) return;
+
+  try {
+    await renderStore.startRender(
+      props.currentTemplate.name,
+      parameterStore.parameters,
+    );
+    if (!showPreview.value) {
+      showPreview.value = true;
+    }
+    ElMessage.success("预览生成成功");
+  } catch (error) {
+    ElMessage.error("预览生成失败");
+  }
+};
+
+const generateNCFile = async () => {
+  if (!props.currentTemplate || !parameterStore.isValid) return;
+
+  try {
+    const result = await renderStore.startRender(
+      props.currentTemplate.name,
+      parameterStore.parameters,
+    );
+
+    if (result && result.results) {
+      ElMessage.success(
+        `NC程序生成成功，共 ${Object.keys(result.results).length} 个文件`,
+      );
+    }
+  } catch (error) {
+    ElMessage.error("NC程序生成失败");
+  }
+};
+
+const validateAndRender = async () => {
+  if (!props.currentTemplate) return;
+
+  try {
+    await validateAllParameters();
+    if (parameterStore.isValid) {
+      await generatePreview();
+    } else {
+      ElMessage.warning("请先修正参数验证错误");
+    }
+  } catch (error) {
+    ElMessage.error("验证并渲染失败");
+  }
+};
 
 // 初始化
 onMounted(() => {
   // 加载保存的预设
-  const savedPresets = localStorage.getItem('parameter_presets')
+  const savedPresets = localStorage.getItem("parameter_presets");
   if (savedPresets) {
     try {
-      presets.value = JSON.parse(savedPresets)
+      presets.value = JSON.parse(savedPresets);
     } catch (error) {
-      console.error('加载预设失败:', error)
+      console.error("加载预设失败:", error);
     }
   }
-})
+});
 
 // 监听模板变化
-watch(() => props.currentTemplate, (newTemplate) => {
-  if (newTemplate) {
-    parameterStore.initialize(newTemplate.name)
-  }
-}, { immediate: true })
+watch(
+  () => props.currentTemplate,
+  (newTemplate) => {
+    if (newTemplate) {
+      parameterStore.initialize(newTemplate.name);
+    }
+  },
+  { immediate: true },
+);
 </script>
 
 <style scoped>
@@ -521,7 +752,7 @@ watch(() => props.currentTemplate, (newTemplate) => {
   background: white;
   border-radius: 12px;
   margin-bottom: 1rem;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
 .header-left h2 {
@@ -552,7 +783,7 @@ watch(() => props.currentTemplate, (newTemplate) => {
   border-radius: 12px;
   padding: 1.5rem;
   margin-bottom: 1.5rem;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
 .overview-cards {
@@ -605,6 +836,47 @@ watch(() => props.currentTemplate, (newTemplate) => {
   margin-top: 1rem;
 }
 
+.render-actions {
+  background: white;
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.render-actions-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.render-actions-header h3 {
+  margin: 0;
+  color: #2c3e50;
+  font-size: 1.25rem;
+}
+
+.render-buttons {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.render-buttons .el-button {
+  min-width: 140px;
+  font-weight: 500;
+}
+
+.render-status {
+  margin-top: 1rem;
+}
+
+.render-status .el-alert {
+  border-radius: 8px;
+}
+
 .progress-header {
   display: flex;
   justify-content: space-between;
@@ -632,7 +904,7 @@ watch(() => props.currentTemplate, (newTemplate) => {
   background: white;
   border-radius: 12px;
   overflow: hidden;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
 .groups-header {
@@ -687,7 +959,7 @@ watch(() => props.currentTemplate, (newTemplate) => {
   background: white;
   border-radius: 12px;
   padding: 1.5rem;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
   max-width: 300px;
   border-left: 4px solid #f56c6c;
 }
@@ -787,20 +1059,65 @@ watch(() => props.currentTemplate, (newTemplate) => {
     gap: 1rem;
     align-items: stretch;
   }
-  
+
   .overview-cards {
     grid-template-columns: repeat(2, 1fr);
   }
-  
+
   .groups-header {
     flex-direction: column;
     gap: 0.75rem;
     align-items: stretch;
   }
-  
+
   .floating-actions {
     right: 1rem;
     bottom: 1rem;
   }
+}
+
+/* 预览面板样式 */
+.preview-panel {
+  margin-top: 1rem;
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e4e7ed;
+}
+
+.preview-panel .preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  background: #f8f9fa;
+  border-bottom: 1px solid #e4e7ed;
+}
+
+.preview-panel .preview-header h3 {
+  margin: 0;
+  color: #2c3e50;
+  font-size: 1.125rem;
+}
+
+.preview-panel .preview-content {
+  padding: 1rem;
+  max-height: 500px;
+  overflow: auto;
+}
+
+.preview-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem;
+  text-align: center;
+  color: #666;
+}
+
+.preview-empty p {
+  margin-bottom: 1rem;
 }
 </style>

@@ -12,6 +12,7 @@
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
+from werkzeug.middleware.proxy_fix import ProxyFix
 import os
 import logging
 from datetime import datetime
@@ -20,9 +21,13 @@ from datetime import datetime
 from backend.controllers.template_controller import template_bp
 from backend.controllers.parameter_controller import parameter_bp
 from backend.controllers.render_controller import render_bp
+from backend.controllers.file_controller import file_bp
 
 # 创建Flask应用
 app = Flask(__name__)
+
+# 启用ProxyFix用于生产环境代理支持
+app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
 # 启用CORS
 CORS(app)
@@ -46,6 +51,7 @@ os.makedirs('logs', exist_ok=True)
 app.register_blueprint(template_bp)
 app.register_blueprint(parameter_bp)
 app.register_blueprint(render_bp)
+app.register_blueprint(file_bp, url_prefix='/api/files')
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
@@ -61,7 +67,8 @@ def health_check():
         'modules': {
             'template_manager': 'active',
             'parameter_manager': 'active',
-            'render_engine': 'active'
+            'render_engine': 'active',
+            'file_manager': 'active'
         }
     })
 
@@ -91,6 +98,7 @@ def app_info():
             'parameters': '/api/parameters/*',
             'render': '/api/templates/*/render',
             'preview': '/api/preview/*',
+            'files': '/api/files/*',
             'health': '/api/health',
             'info': '/api/info'
         }
@@ -109,7 +117,8 @@ def not_found(error):
             '/api/templates',
             '/api/parameters',
             '/api/templates/*/render',
-            '/api/preview/*'
+            '/api/preview/*',
+            '/api/files/*'
         ]
     }), 404
 
@@ -123,16 +132,62 @@ def internal_error(error):
         'constraint': '请检查是否违反PROJECT_REQUIREMENTS.md约束'
     }), 500
 
+def configure_app():
+    """配置应用设置"""
+    # 根据环境变量设置配置
+    if os.environ.get('FLASK_ENV') == 'production':
+        app.config.update(
+            DEBUG=False,
+            TESTING=False,
+            JSONIFY_PRETTYPRINT_REGULAR=False
+        )
+    else:
+        app.config.update(
+            DEBUG=True,
+            TESTING=False,
+            JSONIFY_PRETTYPRINT_REGULAR=True
+        )
+
+def run_production_server():
+    """使用生产级WSGI服务器"""
+    try:
+        from waitress import serve
+        logger.info("🚀 启动生产级服务器 (Waitress)")
+        serve(
+            app,
+            host='0.0.0.0',
+            port=int(os.environ.get('PORT', 5000)),
+            url_scheme='https',
+            threads=4,
+            connection_limit=1000
+        )
+    except ImportError:
+        logger.warning("⚠️ Waitress未安装，回退到Flask开发服务器")
+        logger.warning("⚠️ 生产环境请安装: pip install waitress")
+        run_development_server()
+
+def run_development_server():
+    """使用Flask开发服务器"""
+    logger.info("🚀 启动开发服务器")
+    app.run(
+        debug=app.config.get('DEBUG', True),
+        host='0.0.0.0',
+        port=5000
+    )
+
 if __name__ == '__main__':
+    configure_app()
+    
     logger.info("🚀 启动模板驱动的数控程序生成器")
     logger.info("🔒 约束执行机制已激活")
     logger.info("📋 严格遵循PROJECT_REQUIREMENTS.md文档约束")
     logger.info("📦 模板管理模块已激活")
     logger.info("⚙️ 参数管理模块已激活")
     logger.info("🎨 模板渲染引擎已激活")
+    logger.info("📁 文件管理模块已激活")
     
-    app.run(
-        debug=True,
-        host='0.0.0.0',
-        port=5000
-    )
+    # 根据环境选择服务器
+    if os.environ.get('FLASK_ENV') == 'production':
+        run_production_server()
+    else:
+        run_development_server()

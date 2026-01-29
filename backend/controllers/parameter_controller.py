@@ -15,6 +15,8 @@
 """
 
 from flask import Blueprint, request, jsonify
+import json
+import os
 import logging
 from typing import Dict, Any, List, Tuple, Optional
 import re
@@ -143,7 +145,7 @@ class ParameterManager:
         if not package:
             raise ValueError(f"Template package '{package_name}' not found")
         
-        return package.variables_config
+        return package.config.get('variables', {})
     
     def validate_parameters(self, package_name: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
         """验证参数值"""
@@ -291,4 +293,187 @@ def calculate_parameters(package_name: str):
             'success': False,
             'error': str(e),
             'message': f'参数计算失败: {package_name}'
+        }), 500
+
+@parameter_bp.route('/<package_name>/presets', methods=['GET'])
+def get_presets(package_name: str):
+    """获取模板包的所有参数预设"""
+    try:
+        presets_dir = os.path.join('presets', package_name)
+        presets = []
+        
+        if os.path.exists(presets_dir):
+            for filename in os.listdir(presets_dir):
+                if filename.endswith('.json'):
+                    preset_path = os.path.join(presets_dir, filename)
+                    try:
+                        with open(preset_path, 'r', encoding='utf-8') as f:
+                            preset_data = json.load(f)
+                            presets.append({
+                                'name': preset_data.get('name', filename[:-5]),
+                                'description': preset_data.get('description', ''),
+                                'createdAt': preset_data.get('createdAt', ''),
+                                'parameters': preset_data.get('parameters', {})
+                            })
+                    except Exception as e:
+                        logger.warning(f'Failed to load preset {filename}: {e}')
+        
+        return jsonify({
+            'success': True,
+            'data': presets,
+            'count': len(presets),
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        logger.error(f'Failed to get presets for {package_name}: {e}')
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'message': f'获取参数预设失败: {package_name}'
+        }), 500
+
+@parameter_bp.route('/<package_name>/presets', methods=['POST'])
+def save_preset(package_name: str):
+    """保存参数预设"""
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': 'No data provided',
+                'message': '请提供预设数据'
+            }), 400
+        
+        preset_name = data.get('name')
+        if not preset_name:
+            return jsonify({
+                'success': False,
+                'error': 'Missing preset name',
+                'message': '请提供预设名称'
+            }), 400
+        
+        # 验证preset_name格式
+        import re
+        if not re.match(r'^[\w\s\-]+$', preset_name):
+            return jsonify({
+                'success': False,
+                'error': 'Invalid preset name',
+                'message': '预设名称只能包含字母、数字、空格、下划线和横线'
+            }), 400
+        
+        parameters = data.get('parameters', {})
+        description = data.get('description', '')
+        
+        # 创建预设数据
+        preset_data = {
+            'name': preset_name,
+            'packageName': package_name,
+            'description': description,
+            'parameters': parameters,
+            'createdAt': datetime.now().isoformat()
+        }
+        
+        # 确保目录存在
+        presets_dir = os.path.join('presets', package_name)
+        os.makedirs(presets_dir, exist_ok=True)
+        
+        # 保存预设文件
+        preset_filename = re.sub(r'[^\w\-]', '_', preset_name) + '.json'
+        preset_path = os.path.join(presets_dir, preset_filename)
+        
+        with open(preset_path, 'w', encoding='utf-8') as f:
+            json.dump(preset_data, f, ensure_ascii=False, indent=2)
+        
+        logger.info(f'✅ 成功保存参数预设: {package_name}/{preset_name}')
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'name': preset_name,
+                'description': description,
+                'createdAt': preset_data['createdAt']
+            },
+            'message': f'参数预设 "{preset_name}" 保存成功',
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        logger.error(f'Failed to save preset for {package_name}: {e}')
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'message': f'保存参数预设失败'
+        }), 500
+
+@parameter_bp.route('/<package_name>/presets/<preset_name>', methods=['DELETE'])
+def delete_preset(package_name: str, preset_name: str):
+    """删除参数预设"""
+    try:
+        import re
+        preset_filename = re.sub(r'[^\w\-]', '_', preset_name) + '.json'
+        preset_path = os.path.join('presets', package_name, preset_filename)
+        
+        if not os.path.exists(preset_path):
+            return jsonify({
+                'success': False,
+                'error': 'Preset not found',
+                'message': f'参数预设 "{preset_name}" 不存在'
+            }), 404
+        
+        os.remove(preset_path)
+        
+        logger.info(f'✅ 成功删除参数预设: {package_name}/{preset_name}')
+        
+        return jsonify({
+            'success': True,
+            'message': f'参数预设 "{preset_name}" 已删除',
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        logger.error(f'Failed to delete preset {preset_name} for {package_name}: {e}')
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'message': f'删除参数预设失败'
+        }), 500
+
+@parameter_bp.route('/<package_name>/presets/<preset_name>/load', methods=['GET'])
+def load_preset(package_name: str, preset_name: str):
+    """加载参数预设"""
+    try:
+        import re
+        preset_filename = re.sub(r'[^\w\-]', '_', preset_name) + '.json'
+        preset_path = os.path.join('presets', package_name, preset_filename)
+        
+        if not os.path.exists(preset_path):
+            return jsonify({
+                'success': False,
+                'error': 'Preset not found',
+                'message': f'参数预设 "{preset_name}" 不存在'
+            }), 404
+        
+        with open(preset_path, 'r', encoding='utf-8') as f:
+            preset_data = json.load(f)
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'name': preset_data.get('name', preset_name),
+                'description': preset_data.get('description', ''),
+                'parameters': preset_data.get('parameters', {}),
+                'createdAt': preset_data.get('createdAt', '')
+            },
+            'message': f'参数预设 "{preset_name}" 加载成功',
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        logger.error(f'Failed to load preset {preset_name} for {package_name}: {e}')
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'message': f'加载参数预设失败'
         }), 500

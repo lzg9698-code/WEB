@@ -253,48 +253,23 @@ const localTheme = ref(props.theme);
 // 计算属性
 const containerHeight = computed(() => props.height);
 const hasChanges = computed(() => {
-  return props.modelValue !== editor?.getValue?.();
+  if (!editor.value) return false;
+  return props.modelValue !== editor.value.getValue();
 });
 
 // Monaco编辑器配置
 const setupMonacoEditor = () => {
   if (!editorContainer.value) return;
 
-  // 注册Jinja2语言
-  monaco.languages.register(
-    { id: "jinja2" },
-    {
-      tokenizer: {
-        root: [
-          [/\{\{.*?\}\}/, "variable"],
-          [/\{%.*?%\}/, "keyword.control"],
-          [/\{#.*?#\}/, "comment"],
-          [/\b[G|M]\d+\b/, "function"],
-          [
-            /\b(X|Y|Z|F|S|T|I|J|K|R|P|Q|H|L|U|V|W|D|E|N|C|B|A)\d*\.*?\b/,
-            "number",
-          ],
-          [/\/\/.*$/, "comment"],
-          [/\n|\r/, "whitespace"],
-        ],
-      },
-    },
-  );
-
-  // 注册YAML语言
-  monaco.languages.register(
-    { id: "yaml" },
-    {
-      tokenizer: monaco.languages.yaml.yaml.buildYamlLanguage(),
-    },
-  );
+  // 注册Jinja2语言（必须在创建编辑器之前）
+  registerJinja2Language();
 
   // 创建编辑器
   monaco.editor.create(
     editorContainer.value,
     {
       value: props.modelValue,
-      language: getMonacoLanguage(props.language),
+      language: "jinja2",
       theme: getMonacoTheme(props.theme),
       minimap: {
         enabled: minimap.value,
@@ -327,6 +302,368 @@ const setupMonacoEditor = () => {
   );
 };
 
+// 注册Jinja2语言
+const registerJinja2Language = () => {
+  // 注册语言
+  monaco.languages.register({ id: "jinja2" });
+
+  // 设置语法高亮
+  monaco.languages.setMonarchTokensProvider("jinja2", {
+    tokenizer: {
+      root: [
+        // Jinja2 变量: {{ variable }}
+        [/\{\{.*?\}\}/, "variable"],
+
+        // Jinja2 控制语句: {% if/for/set/block %}
+        [/\{%.*?%\}/, "keyword"],
+
+        // Jinja2 注释: {# comment #}
+        [/\{#.*?#\}/, "comment"],
+
+        // G代码: G00, G01, G02, G03, G17, G18, G19, G20, G21, G28, G40, G41, G42, G43, G54, G90, G91, G94, G95
+        [/\bG[0-9]{2}\b/, "type"],
+
+        // M代码: M00, M01, M02, M03, M04, M05, M06, M08, M09, M30
+        [/\bM[0-9]{2}\b/, "type"],
+
+        // 坐标值: X, Y, Z, I, J, K 加上可选的正负号和小数点
+        [/\b[XYZIJKS][+-]?\d*\.?\d+\b/, "number"],
+
+        // 进给速度: F 值
+        [/\bF[+]?\d*\.?\d+\b/, "number"],
+
+        // 主轴转速: S 值
+        [/\bS[+]?\d*\.?\d+\b/, "number"],
+
+        // 刀具号: T 值
+        [/\bT\d+\b/, "number"],
+
+        // 程序号: O 后面跟数字
+        [/\bO\d+\b/, "string.key"],
+
+        // NC程序注释: (注释内容)
+        [/\([^)]*\)/, "comment"],
+
+        // 行首 % (文件结束标记)
+        [/^%$/, "meta.delimiter"],
+
+        // HTML标签（在Jinja2中可能用到）
+        [/<[^>]+>/, "tag"],
+      ],
+      comment: [
+        [/\{#/, "comment", "@pop"],
+        [/#\}/, "comment", "@pop"],
+        [/./, "comment"],
+      ],
+      string: [
+        [/'[^']*'/, "string"],
+        [/[^']+/, "string"],
+      ],
+    },
+  });
+
+  // 设置自动补全
+  monaco.languages.registerCompletionItemProvider("jinja2", {
+    provideCompletionItems: (model, position) => {
+      const word = model.getWordUntilPosition(position);
+      const range = {
+        startLineNumber: position.lineNumber,
+        endLineNumber: position.lineNumber,
+        startColumn: word.startColumn,
+        endColumn: word.endColumn,
+      };
+
+      return {
+        suggestions: [
+          // Jinja2 过滤器
+          {
+            label: "upper",
+            kind: monaco.languages.CompletionItemKind.Function,
+            insertText: "upper",
+            detail: "将文本转换为大写",
+            range: range,
+          },
+          {
+            label: "lower",
+            kind: monaco.languages.CompletionItemKind.Function,
+            insertText: "lower",
+            detail: "将文本转换为小写",
+            range: range,
+          },
+          {
+            label: "round",
+            kind: monaco.languages.CompletionItemKind.Function,
+            insertText: "round(${1:2})",
+            insertTextRules:
+              monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            detail: "四舍五入到指定小数位",
+            range: range,
+          },
+          {
+            label: "format",
+            kind: monaco.languages.CompletionItemKind.Function,
+            insertText: "format(${1:value})",
+            insertTextRules:
+              monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            detail: "格式化输出",
+            range: range,
+          },
+          {
+            label: "abs",
+            kind: monaco.languages.CompletionItemKind.Function,
+            insertText: "abs",
+            detail: "绝对值",
+            range: range,
+          },
+          {
+            label: "min",
+            kind: monaco.languages.CompletionItemKind.Function,
+            insertText: "min(${1:a}, ${2:b})",
+            insertTextRules:
+              monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            detail: "最小值",
+            range: range,
+          },
+          {
+            label: "max",
+            kind: monaco.languages.CompletionItemKind.Function,
+            insertText: "max(${1:a}, ${2:b})",
+            insertTextRules:
+              monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            detail: "最大值",
+            range: range,
+          },
+          {
+            label: "length",
+            kind: monaco.languages.CompletionItemKind.Function,
+            insertText: "length",
+            detail: "返回序列长度",
+            range: range,
+          },
+          {
+            label: "default",
+            kind: monaco.languages.CompletionItemKind.Function,
+            insertText: "default(${1:value}, ${2:default})",
+            insertTextRules:
+              monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            detail: "设置默认值",
+            range: range,
+          },
+          {
+            label: "safe",
+            kind: monaco.languages.CompletionItemKind.Function,
+            insertText: "safe",
+            detail: "标记为安全的HTML",
+            range: range,
+          },
+          // Jinja2 标签
+          {
+            label: "if",
+            kind: monaco.languages.CompletionItemKind.Keyword,
+            insertText: "{% if ${1:condition} %}\n\t$0\n{% endif %}",
+            insertTextRules:
+              monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            detail: "条件语句",
+            range: range,
+          },
+          {
+            label: "for",
+            kind: monaco.languages.CompletionItemKind.Keyword,
+            insertText: "{% for ${1:item} in ${2:items} %}\n\t$0\n{% endfor %}",
+            insertTextRules:
+              monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            detail: "循环语句",
+            range: range,
+          },
+          {
+            label: "set",
+            kind: monaco.languages.CompletionItemKind.Keyword,
+            insertText: "{% set ${1:var} = ${2:value} %}",
+            insertTextRules:
+              monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            detail: "变量赋值",
+            range: range,
+          },
+          {
+            label: "block",
+            kind: monaco.languages.CompletionItemKind.Keyword,
+            insertText: "{% block ${1:name} %}$0{% endblock %}",
+            insertTextRules:
+              monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            detail: "模板块",
+            range: range,
+          },
+          {
+            label: "extends",
+            kind: monaco.languages.CompletionItemKind.Keyword,
+            insertText: '{% extends "${1:template}" %}',
+            insertTextRules:
+              monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            detail: "继承模板",
+            range: range,
+          },
+          {
+            label: "include",
+            kind: monaco.languages.CompletionItemKind.Keyword,
+            insertText: '{% include "${1:template}" %}',
+            insertTextRules:
+              monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            detail: "包含模板",
+            range: range,
+          },
+          // 数控程序代码片段
+          {
+            label: "g00",
+            kind: monaco.languages.CompletionItemKind.Snippet,
+            insertText: "G00 X${1:0} Y${2:0}",
+            insertTextRules:
+              monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            detail: "快速定位 G00",
+            range: range,
+          },
+          {
+            label: "g01",
+            kind: monaco.languages.CompletionItemKind.Snippet,
+            insertText: "G01 X${1:0} Y${2:0} F${3:100}",
+            insertTextRules:
+              monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            detail: "直线插补 G01",
+            range: range,
+          },
+          {
+            label: "g02",
+            kind: monaco.languages.CompletionItemKind.Snippet,
+            insertText: "G02 X${1:0} Y${2:0} I${3:0} J${4:0} F${5:100}",
+            insertTextRules:
+              monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            detail: "顺时针圆弧 G02",
+            range: range,
+          },
+          {
+            label: "g03",
+            kind: monaco.languages.CompletionItemKind.Snippet,
+            insertText: "G03 X${1:0} Y${2:0} I${3:0} J${4:0} F${5:100}",
+            insertTextRules:
+              monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            detail: "逆时针圆弧 G03",
+            range: range,
+          },
+          {
+            label: "m03",
+            kind: monaco.languages.CompletionItemKind.Snippet,
+            insertText: "M03 S${1:1000}",
+            insertTextRules:
+              monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            detail: "主轴正转 M03",
+            range: range,
+          },
+          {
+            label: "m05",
+            kind: monaco.languages.CompletionItemKind.Snippet,
+            insertText: "M05",
+            detail: "主轴停止 M05",
+            range: range,
+          },
+          {
+            label: "m06",
+            kind: monaco.languages.CompletionItemKind.Snippet,
+            insertText: "M06 T${1:1}",
+            insertTextRules:
+              monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            detail: "换刀 M06",
+            range: range,
+          },
+          {
+            label: "m30",
+            kind: monaco.languages.CompletionItemKind.Snippet,
+            insertText: "M30\n%",
+            detail: "程序结束 M30",
+            range: range,
+          },
+          {
+            label: "g54",
+            kind: monaco.languages.CompletionItemKind.Snippet,
+            insertText: "G54",
+            detail: "工件坐标系 G54",
+            range: range,
+          },
+          {
+            label: "g90",
+            kind: monaco.languages.CompletionItemKind.Snippet,
+            insertText: "G90",
+            detail: "绝对坐标 G90",
+            range: range,
+          },
+          {
+            label: "g91",
+            kind: monaco.languages.CompletionItemKind.Snippet,
+            insertText: "G91",
+            detail: "相对坐标 G91",
+            range: range,
+          },
+          {
+            label: "g43",
+            kind: monaco.languages.CompletionItemKind.Snippet,
+            insertText: "G43 Z${1:10} H${2:1}",
+            insertTextRules:
+              monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            detail: "刀具长度补偿 G43",
+            range: range,
+          },
+          {
+            label: "g40",
+            kind: monaco.languages.CompletionItemKind.Snippet,
+            insertText: "G40",
+            detail: "取消刀具半径补偿 G40",
+            range: range,
+          },
+          {
+            label: "template-header",
+            kind: monaco.languages.CompletionItemKind.Snippet,
+            insertText:
+              "O${1:0001} (${2:Program Name})\n\n(Description: ${3:Description})\n\nG90 G54 G17\nM06 T${4:1}\nM03 S${5:1000}\nG00 X${6:0} Y${7:0}\nG43 Z${8:10} H${9:1}\n$0\n\nM05\nM30\n%",
+            insertTextRules:
+              monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            detail: "NC程序头部模板",
+            range: range,
+          },
+        ],
+      };
+    },
+  });
+
+  // 注册主题颜色（用于语法高亮）
+  monaco.editor.defineTheme("jinja2-light", {
+    base: "vs",
+    inherit: true,
+    rules: [
+      { token: "variable", foreground: "0070C0" },
+      { token: "keyword", foreground: "FF7800", fontStyle: "bold" },
+      { token: "comment", foreground: "008000", fontStyle: "italic" },
+      { token: "type", foreground: "0000FF" },
+      { token: "number", foreground: "FF0000" },
+      { token: "string.key", foreground: "660066" },
+      { token: "tag", foreground: "800000" },
+    ],
+    colors: {},
+  });
+
+  monaco.editor.defineTheme("jinja2-dark", {
+    base: "vs-dark",
+    inherit: true,
+    rules: [
+      { token: "variable", foreground: "4FC1FF" },
+      { token: "keyword", foreground: "FF8C00", fontStyle: "bold" },
+      { token: "comment", foreground: "6A9955", fontStyle: "italic" },
+      { token: "type", foreground: "569CD6" },
+      { token: "number", foreground: "CE9178" },
+      { token: "string.key", foreground: "D4D4D4" },
+      { token: "tag", foreground: "569CD6" },
+    ],
+    colors: {},
+  });
+};
+
 const setupEditorEvents = () => {
   if (!editor.value) return;
 
@@ -357,14 +694,30 @@ const getMonacoLanguage = (language: string): string => {
   return languageMap[language] || "plaintext";
 };
 
+// 根据文件扩展名自动检测语言
+const detectLanguage = (filePath: string): string => {
+  if (!filePath) return "jinja2";
+  const ext = filePath.split(".").pop()?.toLowerCase();
+  const languageMap: Record<string, string> = {
+    j2: "jinja2",
+    jinja2: "jinja2",
+    yaml: "yaml",
+    yml: "yaml",
+    json: "json",
+    md: "markdown",
+    txt: "text",
+  };
+  return languageMap[ext || ""] || "jinja2";
+};
+
 // 主题转换
 const getMonacoTheme = (theme: string): string => {
   const themeMap: Record<string, string> = {
-    light: "vs",
-    dark: "vs-dark",
+    light: "jinja2-light",
+    dark: "jinja2-dark",
     "hc-black": "hc-black",
   };
-  return themeMap[theme] || "vs";
+  return themeMap[theme] || "jinja2-light";
 };
 
 // 方法

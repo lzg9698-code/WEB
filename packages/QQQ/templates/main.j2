@@ -1,0 +1,21 @@
+{# 111 - 主模板 #}
+{# 严格遵循PROJECT_REQUIREMENTS.md文档约束 #}
+
+O{{ program_number }} ({{ program_name }})
+
+(程序说明: {{ description }})
+(创建时间: {{ creation_date }})
+
+G90 G54 G17
+M06 T{{ tool_number }}
+M03 S{{ spindle_speed }}
+G00 X{{ start_x }} Y{{ start_y }}
+G43 Z{{ safe_height }} H{{ tool_length }}
+
+{% for move in rapid_moves %}
+G00 X{{ move.x }} Y{{ move.y }}
+{% endfor %}
+
+M05
+M30
+%

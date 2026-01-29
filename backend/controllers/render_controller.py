@@ -21,9 +21,10 @@ import yaml
 import tempfile
 import zipfile
 import math
+import os
 from datetime import datetime
 from typing import List, Dict, Any, Optional
-from jinja2 import Environment, TemplateError
+from jinja2 import Environment, TemplateError, TemplateSyntaxError, TemplateNotFound
 import json
 
 # 创建蓝图
@@ -37,7 +38,7 @@ class JinjaRenderer:
     def __init__(self, workspace_path: str = "templates"):
         self.workspace_path = Path(workspace_path)
         self.env = Environment(
-            loader=jinja2.FileSystemLoader(self.workspace_path),
+            loader=jinja2.FileSystemLoader(str(self.workspace_path)),
             autoescape=False,
             trim_blocks=True,
             lstrip_blocks=True,
@@ -156,12 +157,12 @@ class JinjaRenderer:
         self.env.filters['length'] = length_filter
         self.env.filters['angle'] = angle_filter
         self.env.filters['speed'] = speed_filter
-        env.filters['sqrt'] = sqrt_filter
-        env.filters['sin'] = sin_filter
-        env.filters['cos'] = cos_filter
-        env.filters['abs'] = abs_filter
-        env.filters['min'] = min_filter
-        env.filters['max'] = max_filter
+        self.env.filters['sqrt'] = sqrt_filter
+        self.env.filters['sin'] = sin_filter
+        self.env.filters['cos'] = cos_filter
+        self.env.filters['abs'] = abs_filter
+        self.env.filters['min'] = min_filter
+        self.env.filters['max'] = max_filter
         
         # 设置全局函数
         self.env.globals.update({
@@ -221,10 +222,9 @@ class JinjaRenderer:
                 
                 result = self.render_template(template_path, parameters)
                 
+                filename = self._generate_filename(filename_pattern, parameters) + extension
+                
                 if result['success']:
-                    # 生成文件名
-                    filename = self._generate_filename(filename_pattern, parameters) + extension
-                    
                     results[output_name] = {
                         'filename': filename,
                         'content': result['content'],
@@ -234,7 +234,7 @@ class JinjaRenderer:
                     }
                 else:
                     results[output_name] = {
-                        'filename': filename + extension,
+                        'filename': filename,
                         'content': '',
                         'description': output_config.get('description', ''),
                         'success': False,
@@ -305,7 +305,6 @@ class JinjaRenderer:
         """验证模板语法"""
         try:
             template = self.env.get_template(template_path)
-            template.parse()  # 检查语法错误
             return {
                 'valid': True,
                 'errors': [],
@@ -348,6 +347,7 @@ def render_template(package_name: str):
             }), 404
         
         # 渲染模板包
+        render_engine = JinjaRenderer(str(template_path))
         result = render_engine.render_package(str(template_path), parameters)
         
         return jsonify({
@@ -382,6 +382,7 @@ def validate_template(package_name: str):
                 'error': f'模板包 {package_name} 不存在'
             }), 404
         
+        render_engine = JinjaRenderer(str(template_path))
         results = []
         template_files = template_path.get_template_files()
         
@@ -395,7 +396,15 @@ def validate_template(package_name: str):
                     'warnings': validation['warnings']
                 })
         
-        template_validation = render_engine.validate_template(template_path / "package.yaml")
+        template_validation = render_engine.validate_template(os.path.join(str(template_path), "package.yaml"))
+        if not template_validation['valid']:
+            results.append({
+                'file': 'package.yaml',
+                'errors': template_validation['errors'],
+                'warnings': template_validation['warnings']
+            })
+        
+        template_validation = render_engine.validate_template(os.path.join(str(template_path), "package.yaml"))
         if not template_validation['valid']:
             results.append({
                 'file': 'package.yaml',
@@ -435,10 +444,11 @@ def preview_template(package_name: str):
         template_path = package_manager.get_package_by_name(package_name)
         if not template_path:
             return jsonify({
-                'success': false,
+                'success': False,
                 'error': f'模板包 {package_name} 不存在'
             }), 404
         
+        render_engine = JinjaRenderer(str(template_path))
         # 获取主模板进行预览
         main_template = template_path.config.get('templates', {}).get('main')
         if main_template:
@@ -459,6 +469,75 @@ def preview_template(package_name: str):
         
     except Exception as e:
         logger.error(f"预览模板失败: {package_name}, 错误: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@render_bp.route('/templates/<package_name>/export', methods=['POST'])
+def export_template(package_name: str):
+    """导出渲染结果为ZIP文件"""
+    try:
+        data = request.get_json()
+        if not data or 'parameters' not in data:
+            return jsonify({
+                'success': False,
+                'error': '请提供parameters参数'
+            }), 400
+        
+        parameters = data['parameters']
+        
+        package_manager = TemplateManager()
+        template_path = package_manager.get_package_by_name(package_name)
+        if not template_path:
+            return jsonify({
+                'success': False,
+                'error': f'模板包 {package_name} 不存在'
+            }), 404
+        
+        render_engine = JinjaRenderer(str(template_path))
+        result = render_engine.render_package(str(template_path), parameters)
+        
+        if not result.get('success'):
+            return jsonify({
+                'success': False,
+                'error': result.get('error', '渲染失败')
+            }), 500
+        
+        # 创建临时ZIP文件
+        import os
+        temp_dir = tempfile.mkdtemp()
+        zip_path = os.path.join(temp_dir, f"{package_name}_export.zip")
+        
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            # 添加渲染结果文件
+            for filename, file_data in result.get('results', {}).items():
+                zipf.writestr(file_data.get('filename', filename), file_data.get('content', ''))
+            
+            # 添加渲染信息文件
+            info_content = f"""# {package_name} 导出信息
+
+导出时间: {result.get('render_time', datetime.now().isoformat())}
+模板包: {package_name}
+参数数量: {len(parameters)}
+
+## 渲染的文件
+"""
+            for filename, file_data in result.get('results', {}).items():
+                info_content += f"- {file_data.get('filename', filename)}\n"
+            
+            zipf.writestr('export_info.md', info_content)
+        
+        # 发送ZIP文件
+        return send_file(
+            zip_path,
+            mimetype='application/zip',
+            as_attachment=True,
+            download_name=f"{package_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
+        )
+        
+    except Exception as e:
+        logger.error(f"导出模板包失败: {package_name}, 错误: {str(e)}")
         return jsonify({
             'success': False,
             'error': str(e)

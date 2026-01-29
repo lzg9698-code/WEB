@@ -15,6 +15,7 @@
 
 from flask import Blueprint, request, jsonify, send_file
 import os
+import sys
 import yaml
 import logging
 from pathlib import Path
@@ -22,6 +23,13 @@ from typing import List, Dict, Any, Optional
 import zipfile
 import tempfile
 from datetime import datetime
+
+# 添加 backend 目录到 Python 路径
+backend_path = Path(__file__).parent.parent
+if str(backend_path) not in sys.path:
+    sys.path.insert(0, str(backend_path))
+
+from utils.jinja_renderer import RenderEngine
 
 # 创建蓝图
 template_bp = Blueprint('template', __name__, url_prefix='/api/templates')
@@ -284,7 +292,7 @@ def import_template():
         
         file = request.files['file']
         
-        if not file.filename.endswith('.zip'):
+        if not file.filename or not file.filename.endswith('.zip'):
             return jsonify({
                 'success': False,
                 'error': 'Invalid file type',
@@ -300,8 +308,12 @@ def import_template():
         os.makedirs(extract_path)
         
         try:
+            # 保存上传的文件到临时路径
+            temp_file_path = os.path.join(temp_dir, file.filename)
+            file.save(temp_file_path)
+            
             # 解压文件
-            with zipfile.ZipFile(file, 'r') as zip_ref:
+            with zipfile.ZipFile(temp_file_path, 'r') as zip_ref:
                 zip_ref.extractall(extract_path)
             
             # 验证模板包
@@ -443,4 +455,450 @@ def export_template(package_name: str):
             'success': False,
             'error': str(e),
             'message': f'导出模板包 {package_name} 失败'
+        }), 500
+
+@template_bp.route('/create', methods=['POST'])
+def create_template():
+    """创建新模板包"""
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': 'No data provided',
+                'message': '请提供模板包配置信息'
+            }), 400
+        
+        # 验证必要字段
+        required_fields = ['name', 'displayName', 'version', 'category', 'description']
+        missing_fields = [f for f in required_fields if not data.get(f)]
+        if missing_fields:
+            return jsonify({
+                'success': False,
+                'error': 'Missing required fields',
+                'message': f'缺少必要字段: {", ".join(missing_fields)}'
+            }), 400
+        
+        package_name = data['name']
+        
+        # 检查是否已存在
+        if template_manager.get_package_by_name(package_name):
+            return jsonify({
+                'success': False,
+                'error': 'Package already exists',
+                'message': f'模板包 {package_name} 已存在'
+            }), 400
+        
+        # 验证包名格式
+        import re
+        if not re.match(r'^[a-zA-Z][a-zA-Z0-9_-]*$', package_name):
+            return jsonify({
+                'success': False,
+                'error': 'Invalid package name',
+                'message': '模板包名称必须以字母开头，只能包含字母、数字、下划线和横线'
+            }), 400
+        
+        # 创建模板包目录
+        package_path = template_manager.packages_dir / package_name
+        package_path.mkdir(exist_ok=True)
+        
+        # 创建templates目录
+        templates_dir = package_path / 'templates'
+        templates_dir.mkdir(exist_ok=True)
+        
+        # 生成默认模板文件
+        default_template = """{# """ + data['displayName'] + """ - 主模板 #}
+{# 严格遵循PROJECT_REQUIREMENTS.md文档约束 #}
+
+O{{ program_number }} ({{ program_name }})
+
+(程序说明: {{ description }})
+(创建时间: {{ creation_date }})
+
+G90 G54 G17
+M06 T{{ tool_number }}
+M03 S{{ spindle_speed }}
+G00 X{{ start_x }} Y{{ start_y }}
+G43 Z{{ safe_height }} H{{ tool_length }}
+
+{% for move in rapid_moves %}
+G00 X{{ move.x }} Y{{ move.y }}
+{% endfor %}
+
+M05
+M30
+%
+"""
+        
+        main_template_path = templates_dir / 'main.j2'
+        with open(main_template_path, 'w', encoding='utf-8') as f:
+            f.write(default_template)
+        
+        # 构建完整的package.yaml配置
+        package_config = {
+            'package': {
+                'name': package_name,
+                'displayName': data['displayName'],
+                'version': data['version'],
+                'description': data['description'],
+                'category': data['category'],
+                'tags': data.get('tags', []),
+                'author': data.get('author', ''),
+                'icon': data.get('icon', '📦'),
+                'color': data.get('color', '#3498db'),
+                'language': data.get('language', 'zh-CN')
+            },
+            'dependencies': [],
+            'templates': {
+                'main': 'templates/main.j2'
+            },
+            'variables': {
+                'groups': {
+                    'basic': {
+                        'name': '基本参数',
+                        'icon': '🔧',
+                        'parameters': {
+                            'program_name': {
+                                'type': 'string',
+                                'label': '程序名称',
+                                'description': '数控程序的名称',
+                                'default': package_name.upper(),
+                                'required': True
+                            },
+                            'program_number': {
+                                'type': 'number',
+                                'label': '程序号',
+                                'description': 'O程序号',
+                                'default': 10001,
+                                'required': True
+                            },
+                            'tool_number': {
+                                'type': 'number',
+                                'label': '刀具号',
+                                'description': '刀具编号',
+                                'default': 1,
+                                'required': True
+                            },
+                            'spindle_speed': {
+                                'type': 'speed',
+                                'label': '主轴转速',
+                                'unit': 'rpm',
+                                'default': 3000,
+                                'range': [100, 30000],
+                                'required': True
+                            },
+                            'feed_rate': {
+                                'type': 'speed',
+                                'label': '进给速度',
+                                'unit': 'mm/min',
+                                'default': 1500,
+                                'range': [10, 10000],
+                                'required': True
+                            },
+                            'start_x': {
+                                'type': 'length',
+                                'label': '起始X坐标',
+                                'unit': 'mm',
+                                'default': 0,
+                                'required': True
+                            },
+                            'start_y': {
+                                'type': 'length',
+                                'label': '起始Y坐标',
+                                'unit': 'mm',
+                                'default': 0,
+                                'required': True
+                            },
+                            'safe_height': {
+                                'type': 'length',
+                                'label': '安全高度',
+                                'unit': 'mm',
+                                'default': 10,
+                                'range': [1, 100],
+                                'required': True
+                            },
+                            'tool_length': {
+                                'type': 'length',
+                                'label': '刀具长度',
+                                'unit': 'mm',
+                                'default': 50,
+                                'required': True
+                            },
+                            'description': {
+                                'type': 'string',
+                                'label': '程序描述',
+                                'description': '程序说明信息',
+                                'default': '',
+                                'required': False
+                            },
+                            'creation_date': {
+                                'type': 'string',
+                                'label': '创建日期',
+                                'description': '程序创建日期',
+                                'default': '2026-01-15',
+                                'required': False
+                            },
+                            'rapid_moves': {
+                                'type': 'array',
+                                'label': '快速移动点',
+                                'description': '快速移动坐标点列表',
+                                'default': [],
+                                'required': False
+                            }
+                        }
+                    }
+                }
+            },
+            'outputs': {
+                'default_format': '.nc',
+                'supported_formats': ['.nc', '.mpf', '.spf', '.txt'],
+                'files': {
+                    'main_program': {
+                        'template': 'templates/main.j2',
+                        'filename_pattern': '{{program_name}}',
+                        'extension': '.nc',
+                        'description': '主加工程序',
+                        'enabled': True,
+                        'is_default': True
+                    }
+                }
+            },
+            'presets': {
+                '默认': {
+                    'description': '默认参数',
+                    'parameters': {}
+                }
+            },
+            'validation': {
+                'rules': {
+                    'safe_height_check': {
+                        'condition': 'safe_height > 5',
+                        'message': '安全高度建议大于5mm',
+                        'level': 'warning'
+                    }
+                }
+            }
+        }
+        
+        # 保存package.yaml
+        package_config_path = package_path / 'package.yaml'
+        with open(package_config_path, 'w', encoding='utf-8') as f:
+            yaml.dump(package_config, f, allow_unicode=True, sort_keys=False)
+        
+        # 重新扫描并返回新创建的模板包
+        template_manager._scan_packages()
+        package = template_manager.get_package_by_name(package_name)
+        
+        logger.info(f'✅ 成功创建模板包: {package_name}')
+        
+        # 重新扫描并获取新创建的模板包
+        template_manager._scan_packages()
+        new_package = template_manager.get_package_by_name(package_name)
+        
+        if not new_package:
+            return jsonify({
+                'success': True,
+                'message': f'模板包创建成功，但无法立即加载',
+                'data': {
+                    'name': package_name,
+                    'displayName': data['displayName'],
+                    'version': data['version']
+                }
+            })
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'name': new_package.name,
+                'displayName': new_package.display_name,
+                'version': new_package.version
+            },
+            'message': f'模板包 {new_package.display_name} 创建成功',
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        logger.error(f'Failed to create template: {e}')
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'message': '创建模板包失败'
+        }), 500
+
+@template_bp.route('/<package_name>/duplicate', methods=['POST'])
+def duplicate_template(package_name: str):
+    """复制模板包"""
+    try:
+        data = request.get_json() or {}
+        new_name = data.get('newName', f'{package_name}_copy')
+        new_display_name = data.get('newDisplayName', f'{package_name} (副本)')
+        
+        # 验证新包名格式
+        import re
+        if not re.match(r'^[a-zA-Z][a-zA-Z0-9_-]*$', new_name):
+            return jsonify({
+                'success': False,
+                'error': 'Invalid package name',
+                'message': '模板包名称必须以字母开头，只能包含字母、数字、下划线和横线'
+            }), 400
+        
+        # 检查原包是否存在
+        source_package = template_manager.get_package_by_name(package_name)
+        if not source_package:
+            return jsonify({
+                'success': False,
+                'error': 'Source package not found',
+                'message': f'源模板包 {package_name} 不存在'
+            }), 404
+        
+        # 检查新包名是否已存在
+        if template_manager.get_package_by_name(new_name):
+            return jsonify({
+                'success': False,
+                'error': 'Package already exists',
+                'message': f'模板包 {new_name} 已存在'
+            }), 400
+        
+        import shutil
+        
+        # 复制目录
+        source_path = source_package.path
+        target_path = template_manager.packages_dir / new_name
+        shutil.copytree(source_path, target_path)
+        
+        # 更新package.yaml中的名称
+        config_path = target_path / 'package.yaml'
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = yaml.safe_load(f)
+        
+        config['package']['name'] = new_name
+        config['package']['displayName'] = new_display_name
+        
+        with open(config_path, 'w', encoding='utf-8') as f:
+            yaml.dump(config, f, allow_unicode=True, sort_keys=False)
+        
+        # 重新扫描
+        template_manager._scan_packages()
+        
+        new_package = template_manager.get_package_by_name(new_name)
+        
+        if not new_package:
+            return jsonify({
+                'success': True,
+                'message': f'模板包复制成功，但无法立即加载',
+                'data': {
+                    'name': new_name,
+                    'displayName': new_display_name
+                }
+            })
+        
+        logger.info(f'✅ 成功复制模板包: {package_name} -> {new_name}')
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'name': new_package.name,
+                'displayName': new_package.display_name,
+                'version': new_package.version
+            },
+            'message': f'模板包 {new_display_name} 复制成功',
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        logger.error(f'Failed to duplicate template {package_name}: {e}')
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'message': f'复制模板包 {package_name} 失败'
+        }), 500
+
+@template_bp.route('/<package_name>/preview', methods=['GET'])
+def preview_template(package_name: str):
+    """预览模板（返回默认渲染结果）"""
+    try:
+        package = template_manager.get_package_by_name(package_name)
+        
+        if not package:
+            return jsonify({
+                'success': False,
+                'error': 'Package not found',
+                'message': f'模板包 {package_name} 不存在'
+            }), 404
+        
+        # 获取默认参数
+        config = package.config
+        default_params = {}
+        
+        if 'variables' in config and 'groups' in config['variables']:
+            for group_name, group_data in config['variables']['groups'].items():
+                if 'parameters' in group_data:
+                    for param_name, param_data in group_data['parameters'].items():
+                        if 'default' in param_data:
+                             default_params[param_name] = param_data['default']
+        
+        # 渲染模板
+        render_engine = RenderEngine(str(package.path))
+        
+        preview_content = ''
+        try:
+            main_template = config['templates']['main']
+            preview_content = render_engine.render_template(main_template, default_params)
+        except Exception as e:
+            preview_content = f'; 预览失败: {str(e)}\n; 请检查模板配置和参数定义'
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'content': preview_content,
+                'parameters': default_params
+            },
+            'message': '预览生成成功',
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        logger.error(f'Failed to preview template {package_name}: {e}')
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'message': f'生成预览失败'
+        }), 500
+
+@template_bp.route('/<package_name>/versions', methods=['GET'])
+def get_template_versions(package_name: str):
+    """获取模板版本历史"""
+    try:
+        package = template_manager.get_package_by_name(package_name)
+        
+        if not package:
+            return jsonify({
+                'success': False,
+                'error': 'Package not found',
+                'message': f'模板包 {package_name} 不存在'
+            }), 404
+        
+        # 模拟版本历史（实际应从版本控制系统中获取）
+        versions = [
+            {
+                'version': package.version,
+                'createdAt': datetime.now().isoformat(),
+                'description': '当前版本'
+            }
+        ]
+        
+        return jsonify({
+            'success': True,
+            'data': versions,
+            'count': len(versions),
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        logger.error(f'Failed to get versions for template {package_name}: {e}')
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'message': f'获取版本历史失败'
         }), 500

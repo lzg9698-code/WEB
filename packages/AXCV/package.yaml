@@ -1,0 +1,126 @@
+package:
+  name: AXCV
+  displayName: 阿瑟
+  version: 1.0.0
+  description: 去求
+  category: 车削
+  tags: []
+  author: ''
+  icon: 📦
+  color: '#3498db'
+  language: zh-CN
+dependencies: []
+templates:
+  main: templates/main.j2
+variables:
+  groups:
+    basic:
+      name: 基本参数
+      icon: 🔧
+      parameters:
+        program_name:
+          type: string
+          label: 程序名称
+          description: 数控程序的名称
+          default: AXCV
+          required: true
+        program_number:
+          type: number
+          label: 程序号
+          description: O程序号
+          default: 10001
+          required: true
+        tool_number:
+          type: number
+          label: 刀具号
+          description: 刀具编号
+          default: 1
+          required: true
+        spindle_speed:
+          type: speed
+          label: 主轴转速
+          unit: rpm
+          default: 3000
+          range:
+          - 100
+          - 30000
+          required: true
+        feed_rate:
+          type: speed
+          label: 进给速度
+          unit: mm/min
+          default: 1500
+          range:
+          - 10
+          - 10000
+          required: true
+        start_x:
+          type: length
+          label: 起始X坐标
+          unit: mm
+          default: 0
+          required: true
+        start_y:
+          type: length
+          label: 起始Y坐标
+          unit: mm
+          default: 0
+          required: true
+        safe_height:
+          type: length
+          label: 安全高度
+          unit: mm
+          default: 10
+          range:
+          - 1
+          - 100
+          required: true
+        tool_length:
+          type: length
+          label: 刀具长度
+          unit: mm
+          default: 50
+          required: true
+        description:
+          type: string
+          label: 程序描述
+          description: 程序说明信息
+          default: ''
+          required: false
+        creation_date:
+          type: string
+          label: 创建日期
+          description: 程序创建日期
+          default: '2026-01-15'
+          required: false
+        rapid_moves:
+          type: array
+          label: 快速移动点
+          description: 快速移动坐标点列表
+          default: []
+          required: false
+outputs:
+  default_format: .nc
+  supported_formats:
+  - .nc
+  - .mpf
+  - .spf
+  - .txt
+  files:
+    main_program:
+      template: templates/main.j2
+      filename_pattern: '{{program_name}}'
+      extension: .nc
+      description: 主加工程序
+      enabled: true
+      is_default: true
+presets:
+  默认:
+    description: 默认参数
+    parameters: {}
+validation:
+  rules:
+    safe_height_check:
+      condition: safe_height > 5
+      message: 安全高度建议大于5mm
+      level: warning

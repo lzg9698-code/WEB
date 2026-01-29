@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>按钮测试页面</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            padding: 40px;
+            background: #f5f5f5;
+        }
+        .test-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        .test-section h3 {
+            margin-top: 0;
+            color: #3498db;
+        }
+        .button-group {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-top: 15px;
+        }
+        .test-btn {
+            padding: 12px 24px;
+            font-size: 14px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .test-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .btn-primary {
+            background: #3498db;
+            color: white;
+        }
+        .btn-success {
+            background: #27ae60;
+            color: white;
+        }
+        .btn-warning {
+            background: #f39c12;
+            color: white;
+        }
+        .status {
+            margin-top: 15px;
+            padding: 10px;
+            background: #e8f5e9;
+            border-radius: 4px;
+            color: #2e7d32;
+        }
+        .error {
+            background: #ffebee;
+            color: #c62828;
+        }
+        #result {
+            margin-top: 20px;
+            padding: 15px;
+            background: #fff3e0;
+            border-radius: 8px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>🧪 按钮功能测试页面</h1>
+        
+        <div class="test-section">
+            <h3>测试 1: 预览按钮</h3>
+            <p>点击按钮测试 generatePreview 功能</p>
+            <div class="button-group">
+                <button class="test-btn btn-primary" onclick="testPreview()">
+                    👁️ 预览
+                </button>
+            </div>
+            <div id="preview-status" class="status" style="display:none;"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3>测试 2: 导出按钮</h3>
+            <p>点击按钮测试 exportRender 功能</p>
+            <div class="button-group">
+                <button class="test-btn btn-success" onclick="testExport()">
+                    📦 导出
+                </button>
+            </div>
+            <div id="export-status" class="status" style="display:none;"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3>测试 3: 后端连接</h3>
+            <p>测试与后端 API 的连接</p>
+            <div class="button-group">
+                <button class="test-btn btn-warning" onclick="testBackend()">
+                    🔌 测试后端连接
+                </button>
+            </div>
+            <div id="backend-status" class="status" style="display:none;"></div>
+        </div>
+        
+        <div id="result"></div>
+    </div>
+
+    <script>
+        const result = document.getElementById('result');
+        
+        function log(message, isError = false) {
+            const timestamp = new Date().toLocaleTimeString();
+            const prefix = isError ? '❌' : '✅';
+            result.textContent += `[${timestamp}] ${prefix} ${message}\n`;
+            console.log(message);
+        }
+        
+        async function testBackend() {
+            const status = document.getElementById('backend-status');
+            status.style.display = 'block';
+            status.textContent = '正在测试...';
+            status.className = 'status';
+            
+            try {
+                log('测试后端连接...');
+                
+                // 测试健康检查
+                const health = await fetch('http://localhost:5000/api/health');
+                const healthData = await health.json();
+                log(`后端状态: ${healthData.status}`);
+                log(`约束机制: ${healthData.constraint}`);
+                log(`模块: ${JSON.stringify(healthData.modules)}`);
+                
+                // 测试模板API
+                const templates = await fetch('http://localhost:5000/api/templates/');
+                const templateData = await templates.json();
+                log(`模板数量: ${templateData.count}`);
+                log(`模板列表: ${templateData.data.map(t => t.displayName).join(', ')}`);
+                
+                status.textContent = '后端连接正常!';
+                log('后端测试完成');
+            } catch (error) {
+                log(`后端连接失败: ${error.message}`, true);
+                status.textContent = `后端连接失败: ${error.message}`;
+                status.className = 'status error';
+            }
+        }
+        
+        async function testPreview() {
+            const status = document.getElementById('preview-status');
+            status.style.display = 'block';
+            status.textContent = '正在生成预览...';
+            status.className = 'status';
+            
+            try {
+                log('测试预览功能...');
+                
+                // 调用渲染API
+                const response = await fetch('http://localhost:5000/api/render/templates/example/render', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        parameters: {
+                            tool_diameter: 10,
+                            feed_rate: 100,
+                            spindle_speed: 1000
+                        }
+                    })
+                });
+                
+                const data = await response.json();
+                log(`渲染成功: ${data.success}`);
+                
+                if (data.data) {
+                    log(`渲染时间: ${data.data.render_time}`);
+                    log(`结果数量: ${Object.keys(data.data.results || {}).length}`);
+                }
+                
+                if (data.errors && data.errors.length > 0) {
+                    log(`错误: ${data.errors.join(', ')}`, true);
+                }
+                
+                status.textContent = '预览生成成功!';
+                log('预览测试完成');
+            } catch (error) {
+                log(`预览失败: ${error.message}`, true);
+                status.textContent = `预览失败: ${error.message}`;
+                status.className = 'status error';
+            }
+        }
+        
+        async function testExport() {
+            const status = document.getElementById('export-status');
+            status.style.display = 'block';
+            status.textContent = '正在导出...';
+            status.className = 'status';
+            
+            try {
+                log('测试导出功能...');
+                
+                const response = await fetch('http://localhost:5000/api/render/templates/example/export', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        parameters: {
+                            tool_diameter: 10,
+                            feed_rate: 100,
+                            spindle_speed: 1000
+                        }
+                    })
+                });
+                
+                if (response.ok) {
+                    const blob = await response.blob();
+                    log(`导出文件大小: ${blob.size} bytes`);
+                    log(`文件类型: ${blob.type}`);
+                    
+                    // 创建下载链接
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'example_export.zip';
+                    // 注意：浏览器可能会阻止自动下载
+                    log('导出文件已准备好 (查看 Network 标签下载)');
+                } else {
+                    log(`导出失败: ${response.status}`, true);
+                }
+                
+                status.textContent = '导出功能测试完成!';
+                log('导出测试完成');
+            } catch (error) {
+                log(`导出失败: ${error.message}`, true);
+                status.textContent = `导出失败: ${error.message}`;
+                status.className = 'status error';
+            }
+        }
+        
+        // 页面加载时自动测试
+        window.onload = function() {
+            log('测试页面已加载');
+            log('请点击上方按钮进行测试');
+        };
+    </script>
+</body>
+</html>
